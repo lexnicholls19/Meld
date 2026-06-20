@@ -1,4 +1,4 @@
-package com.lexnicholls.lovecounter
+package com.lexnicholls.lovecounter.util
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -121,7 +121,8 @@ data class Strings(
     val moviesDesc: String,
     val series: String,
     val films: String,
-    val seen: String
+    val seen: String,
+    val otherWaysToSignIn: String
 )
 
 private val SpanishStrings = Strings(
@@ -230,7 +231,8 @@ private val SpanishStrings = Strings(
     series = "Series",
     films = "Películas",
     seen = "Vista",
-    movieTitle = "Título"
+    movieTitle = "Título",
+    otherWaysToSignIn = "Otras formas de iniciar sesión"
 )
 
 private val EnglishStrings = Strings(
@@ -339,7 +341,8 @@ private val EnglishStrings = Strings(
     series = "Series",
     films = "Movies",
     seen = "Seen",
-    movieTitle = "Title"
+    movieTitle = "Title",
+    otherWaysToSignIn = "Other ways to sign in"
 )
 
 private val FrenchStrings = EnglishStrings.copy(
@@ -428,7 +431,8 @@ private val FrenchStrings = EnglishStrings.copy(
     series = "Séries",
     films = "Films",
     seen = "Vu",
-    movieTitle = "Titre"
+    movieTitle = "Titre",
+    otherWaysToSignIn = "Autres façons de se connecter"
 )
 
 private val GermanStrings = EnglishStrings.copy(
@@ -517,7 +521,8 @@ private val GermanStrings = EnglishStrings.copy(
     series = "Serien",
     films = "Filme",
     seen = "Gesehen",
-    movieTitle = "Titel"
+    movieTitle = "Titel",
+    otherWaysToSignIn = "Andere Möglichkeiten zur Anmeldung"
 )
 
 private val PortugueseStrings = EnglishStrings.copy(
@@ -549,7 +554,7 @@ private val PortugueseStrings = EnglishStrings.copy(
     months = "M",
     days = "D",
     weekDays = "S,T,Q,Q,S,S,D",
-    howDoYouFeel = "Como você se sente?",
+    howDoYouFeel = "Como você se siente?",
     close = "Fechar",
     addedBy = "Adicionado por",
     someone = "Alguien",
@@ -606,7 +611,8 @@ private val PortugueseStrings = EnglishStrings.copy(
     series = "Séries",
     films = "Filmes",
     seen = "Vista",
-    movieTitle = "Título"
+    movieTitle = "Título",
+    otherWaysToSignIn = "Outras formas de entrar"
 )
 
 val LocalStrings = staticCompositionLocalOf { SpanishStrings }

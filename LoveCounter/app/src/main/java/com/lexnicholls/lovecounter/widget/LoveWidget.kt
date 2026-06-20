@@ -19,7 +19,6 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.ColorFilter
 import com.google.firebase.firestore.FirebaseFirestore
-import com.lexnicholls.lovecounter.ImportantDate
 import com.lexnicholls.lovecounter.MainActivity
 import com.lexnicholls.lovecounter.R
 import kotlinx.coroutines.tasks.await
@@ -67,6 +66,14 @@ class TogglePageAction : ActionCallback {
     }
 }
 
+
+data class ImportantDate(
+    val id: String = "",
+    val name: String = "",
+    val type: String = "",
+    val value: String = "",
+    val isCompleted: Boolean = false
+)
 
 // Data Class local for widget or use the one from project
 data class ImportantDateWithSource(
