@@ -1,0 +1,39 @@
+# Built variants
+**/build/
+/captures
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+*.iws
+*.ipr
+
+# Gradle
+.gradle/
+# Note: It's usually recommended to commit gradlew and gradle-wrapper.jar
+# so others can build the project easily. I'll leave them out of ignore.
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log Files
+*.log
+
+# Firebase / Google Services (SENSITIVE)
+**/google-services.json
+
+# Keystore files (SENSITIVE)
+*.jks
+*.keystore
+*.p12
+
+# Android Studio 3.x / NDK
+.externalNativeBuild/
+.cxx/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Secrets
+secrets.properties
