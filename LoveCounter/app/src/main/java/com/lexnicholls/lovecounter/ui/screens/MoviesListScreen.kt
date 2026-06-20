@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -29,10 +30,12 @@ fun MoviesListScreen(
     onAddClick: () -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val userId = auth.currentUser?.uid ?: "global"
     var movies by remember { mutableStateOf<List<MovieItem>>(emptyList()) }
 
-    DisposableEffect(Unit) {
-        val registration = db.collection("movies")
+    DisposableEffect(userId) {
+        val registration = db.collection("users").document(userId).collection("movies")
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
@@ -61,7 +64,7 @@ fun MoviesListScreen(
                         "timestamp" to Timestamp.now(),
                         "addedBy" to userName
                     )
-                    db.collection("movies").add(item)
+                    db.collection("users").document(userId).collection("movies").add(item)
                     onDismissDialog()
                 }
             }
@@ -83,7 +86,7 @@ fun MoviesListScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(movies) { movie ->
                 MovieRow(movie, onDelete = {
-                    db.collection("movies").document(movie.id).delete()
+                    db.collection("users").document(userId).collection("movies").document(movie.id).delete()
                 })
             }
         }

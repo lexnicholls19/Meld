@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -30,10 +31,12 @@ fun ImportantDatesScreen(
     onCompletedViewToggled: (Boolean) -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val userId = auth.currentUser?.uid ?: "global"
     var dates by remember { mutableStateOf<List<DateItem>>(emptyList()) }
 
-    DisposableEffect(Unit) {
-        val registration = db.collection("important_dates")
+    DisposableEffect(userId) {
+        val registration = db.collection("users").document(userId).collection("important_dates")
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
@@ -62,7 +65,7 @@ fun ImportantDatesScreen(
                         "timestamp" to Timestamp.now(),
                         "addedBy" to userName
                     )
-                    db.collection("important_dates").add(item)
+                    db.collection("users").document(userId).collection("important_dates").add(item)
                     onDismissDialog()
                 }
             }
@@ -84,7 +87,7 @@ fun ImportantDatesScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(dates) { date ->
                 DateRow(date, onDelete = {
-                    db.collection("important_dates").document(date.id).delete()
+                    db.collection("users").document(userId).collection("important_dates").document(date.id).delete()
                 })
             }
         }

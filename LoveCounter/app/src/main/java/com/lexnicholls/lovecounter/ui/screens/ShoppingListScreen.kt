@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -28,10 +29,12 @@ fun ShoppingListScreen(
     onDismissDialog: () -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val userId = auth.currentUser?.uid ?: "global"
     var items by remember { mutableStateOf<List<ShoppingItem>>(emptyList()) }
 
-    DisposableEffect(Unit) {
-        val registration = db.collection("shopping_list")
+    DisposableEffect(userId) {
+        val registration = db.collection("users").document(userId).collection("shopping_list")
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) return@addSnapshotListener
@@ -62,7 +65,7 @@ fun ShoppingListScreen(
                         "timestamp" to Timestamp.now(),
                         "addedBy" to userName
                     )
-                    db.collection("shopping_list").add(item)
+                    db.collection("users").document(userId).collection("shopping_list").add(item)
                     onDismissDialog()
                 }
             }
@@ -84,9 +87,9 @@ fun ShoppingListScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(items) { item ->
                 ShoppingRow(item, onToggle = {
-                    db.collection("shopping_list").document(item.id).update("bought", !item.bought)
+                    db.collection("users").document(userId).collection("shopping_list").document(item.id).update("bought", !item.bought)
                 }, onDelete = {
-                    db.collection("shopping_list").document(item.id).delete()
+                    db.collection("users").document(userId).collection("shopping_list").document(item.id).delete()
                 })
             }
         }

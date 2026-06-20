@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -30,6 +31,8 @@ fun BucketListScreen(
     onCompletedViewToggled: (Boolean) -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val userId = auth.currentUser?.uid ?: "global"
     var items by remember { mutableStateOf<List<BucketItem>>(emptyList()) }
     var isCompletedView by rememberSaveable { mutableStateOf(false) }
 
@@ -37,8 +40,8 @@ fun BucketListScreen(
         onCompletedViewToggled(isCompletedView)
     }
 
-    DisposableEffect(isCompletedView) {
-        val collection = db.collection("bucket_list")
+    DisposableEffect(isCompletedView, userId) {
+        val collection = db.collection("users").document(userId).collection("bucket_list")
         val query = collection
             .whereEqualTo("completed", isCompletedView)
             .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -72,7 +75,7 @@ fun BucketListScreen(
                         "timestamp" to Timestamp.now(),
                         "addedBy" to userName
                     )
-                    db.collection("bucket_list").add(item)
+                    db.collection("users").document(userId).collection("bucket_list").add(item)
                     onDismissDialog()
                 }
             }
@@ -106,9 +109,9 @@ fun BucketListScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(items) { item ->
                 BucketRow(item, onToggle = {
-                    db.collection("bucket_list").document(item.id).update("completed", !item.completed)
+                    db.collection("users").document(userId).collection("bucket_list").document(item.id).update("completed", !item.completed)
                 }, onDelete = {
-                    db.collection("bucket_list").document(item.id).delete()
+                    db.collection("users").document(userId).collection("bucket_list").document(item.id).delete()
                 })
             }
         }
