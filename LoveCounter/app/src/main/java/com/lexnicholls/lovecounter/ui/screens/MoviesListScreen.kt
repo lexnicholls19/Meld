@@ -83,6 +83,35 @@ fun MoviesListScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.Construction,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = Color.Gray.copy(alpha = 0.5f)
+                )
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "Próximamente",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Gray
+                )
+                Text(
+                    text = "Estamos trabajando en esta sección ✨",
+                    fontSize = 14.sp,
+                    color = Color.Gray.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+
+        // LazyColumn oculto temporalmente
+        /*
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(movies) { movie ->
                 MovieRow(movie, onDelete = {
@@ -90,6 +119,7 @@ fun MoviesListScreen(
                 })
             }
         }
+        */
     }
 }
 
