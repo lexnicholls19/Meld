@@ -472,7 +472,6 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 deviceId = deviceId,
                                                 userName = userName,
-                                                isExpanded = isExpanded,
                                                 onNavigateToSecond = { navController.navigate(Screen.Second.name) },
                                                 onNavigateToThird = { navController.navigate(Screen.Third.name) },
                                                 onNavigateToFourth = { navController.navigate(Screen.Fourth.name) },
