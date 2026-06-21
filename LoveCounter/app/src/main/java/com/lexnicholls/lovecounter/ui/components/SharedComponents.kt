@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lexnicholls.lovecounter.util.t
@@ -102,6 +103,35 @@ fun LoveAlertDialog(
                 }
             }
         } else null
+    )
+}
+
+@Composable
+fun LoveTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    label: String,
+    placeholder: String = "",
+    isOptional: Boolean = false,
+    singleLine: Boolean = true,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    modifier: Modifier = Modifier
+) {
+    val labelText = if (isOptional) "$label (${t().optionalShort})" else label
+    
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(labelText) },
+        placeholder = { if (placeholder.isNotEmpty()) Text(placeholder) },
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        singleLine = singleLine,
+        keyboardOptions = keyboardOptions,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = LovePink,
+            focusedLabelColor = LovePink
+        )
     )
 }
 

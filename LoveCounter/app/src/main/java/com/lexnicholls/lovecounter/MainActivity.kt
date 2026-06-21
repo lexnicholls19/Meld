@@ -438,6 +438,9 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 AppBackground {
                                     val currentUser = remember { FirebaseAuth.getInstance().currentUser }
+                                    val loveViewModel: LoveViewModel = hiltViewModel()
+                                    val sharedId by loveViewModel.sharedId
+
                                     NavHost(
                                         navController = navController,
                                         startDestination = if (currentUser != null) Screen.Main.name else Screen.Login.name
@@ -486,7 +489,8 @@ class MainActivity : ComponentActivity() {
                                                 userName = userName,
                                                 showAddDialog = showAddDialog,
                                                 onDismissDialog = { showAddDialog = false },
-                                                onCompletedViewToggled = { isCompletedViewOpen = it }
+                                                onCompletedViewToggled = { isCompletedViewOpen = it },
+                                                userId = sharedId ?: ""
                                             )
                                         }
                                         composable(Screen.Third.name) {
@@ -495,7 +499,8 @@ class MainActivity : ComponentActivity() {
                                                 userName = userName,
                                                 showAddDialog = showAddDialog,
                                                 onDismissDialog = { showAddDialog = false },
-                                                onCompletedViewToggled = { isCompletedViewOpen = it }
+                                                onCompletedViewToggled = { isCompletedViewOpen = it },
+                                                userId = sharedId ?: ""
                                             )
                                         }
                                         composable(Screen.Fourth.name) {
@@ -503,7 +508,8 @@ class MainActivity : ComponentActivity() {
                                                 deviceId = deviceId,
                                                 userName = userName,
                                                 showAddDialog = showAddDialog,
-                                                onDismissDialog = { showAddDialog = false }
+                                                onDismissDialog = { showAddDialog = false },
+                                                userId = sharedId ?: ""
                                             )
                                         }
                                         composable(Screen.BucketList.name) {
@@ -512,7 +518,8 @@ class MainActivity : ComponentActivity() {
                                                 userName = userName,
                                                 showAddDialog = showAddDialog,
                                                 onDismissDialog = { showAddDialog = false },
-                                                onCompletedViewToggled = { isCompletedViewOpen = it }
+                                                onCompletedViewToggled = { isCompletedViewOpen = it },
+                                                userId = sharedId ?: ""
                                             )
                                         }
                                         composable(Screen.Movies.name) {
@@ -521,7 +528,8 @@ class MainActivity : ComponentActivity() {
                                                 userName = userName,
                                                 showAddDialog = showAddDialog,
                                                 onDismissDialog = { showAddDialog = false },
-                                                onAddClick = { showAddDialog = true }
+                                                onAddClick = { showAddDialog = true },
+                                                userId = sharedId ?: ""
                                             )
                                         }
                                         composable(Screen.DailyConnection.name) {

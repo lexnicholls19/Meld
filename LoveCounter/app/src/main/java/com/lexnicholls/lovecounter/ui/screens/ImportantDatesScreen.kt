@@ -42,14 +42,13 @@ import java.util.Date
 fun ImportantDatesScreen(
     deviceId: String,
     userName: String,
+    userId: String,
     showAddDialog: Boolean,
     onDismissDialog: () -> Unit,
     onCompletedViewToggled: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
-    val auth = FirebaseAuth.getInstance()
-    val userId = auth.currentUser?.uid ?: "global"
     
     var dates by remember { mutableStateOf<List<DateItem>>(emptyList()) }
 

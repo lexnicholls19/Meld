@@ -51,13 +51,12 @@ import kotlin.math.roundToInt
 fun ShoppingListScreen(
     deviceId: String,
     userName: String,
+    userId: String,
     showAddDialog: Boolean,
     onDismissDialog: () -> Unit
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
-    val auth = FirebaseAuth.getInstance()
-    val userId = auth.currentUser?.uid ?: "global"
     
     val sharedPrefs = remember { context.getSharedPreferences("prefs", Context.MODE_PRIVATE) }
     val localCurrency = remember { sharedPrefs.getString("local_currency", "COP") ?: "COP" }

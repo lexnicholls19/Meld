@@ -25,13 +25,12 @@ import com.lexnicholls.lovecounter.ui.components.LoveTextField
 fun MoviesListScreen(
     deviceId: String,
     userName: String,
+    userId: String,
     showAddDialog: Boolean,
     onDismissDialog: () -> Unit,
     onAddClick: () -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
-    val auth = FirebaseAuth.getInstance()
-    val userId = auth.currentUser?.uid ?: "global"
     var movies by remember { mutableStateOf<List<MovieItem>>(emptyList()) }
 
     DisposableEffect(userId) {

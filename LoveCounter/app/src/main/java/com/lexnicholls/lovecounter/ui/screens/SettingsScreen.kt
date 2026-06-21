@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
@@ -54,10 +56,21 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val strings = t()
+    val loveViewModel: com.lexnicholls.lovecounter.viewmodel.LoveViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    
+    val relationId by loveViewModel.relationId
+    val linkingCode by loveViewModel.linkingCode
+    val isLinking by loveViewModel.isLinking
+
     var tempName by remember { mutableStateOf(currentName) }
     var tempTitle by remember { mutableStateOf(currentMainTitle) }
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var showWidgetDialog by remember { mutableStateOf(false) }
+    var showLinkDialog by remember { mutableStateOf(false) }
+    var showRelationDetailsDialog by remember { mutableStateOf(false) }
+    var inputCode by remember { mutableStateOf(TextFieldValue("")) }
+
+    val members by loveViewModel.members
 
     Column(
         modifier = Modifier
@@ -73,6 +86,66 @@ fun SettingsScreen(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(vertical = 16.dp)
         )
+
+        // --- SECCIÓN: PAREJA Y ENLACE ---
+        SettingsGroup(title = "Relación") {
+            if (relationId != null) {
+                SettingsClickableRow(
+                    label = "Estado de Relación",
+                    value = "¡Enlazado! (${members.size} integrantes)",
+                    icon = Icons.Default.Favorite,
+                    onClick = { showRelationDetailsDialog = true }
+                )
+                SettingsClickableRow(
+                    label = "Detalles de Relación",
+                    value = "Ver integrantes y código",
+                    icon = Icons.Default.Groups,
+                    onClick = { showRelationDetailsDialog = true }
+                )
+                Button(
+                    onClick = { loveViewModel.unlinkPartner() },
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Desvincular pareja")
+                }
+            } else {
+                SettingsClickableRow(
+                    label = "Vincular con mi pareja",
+                    value = if (linkingCode != null) {
+                        val formatted = linkingCode?.chunked(4)?.joinToString("-") ?: ""
+                        "Código: $formatted"
+                    } else "Generar código",
+                    icon = Icons.Default.Link,
+                    onClick = { 
+                        if (linkingCode == null) loveViewModel.generateLinkingCode()
+                        else {
+                            // Copiar al portapapeles (el código sin guiones para que sea fácil de pegar)
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Código de Enlace", linkingCode)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Código copiado", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+                if (linkingCode != null) {
+                    TextButton(
+                        onClick = { loveViewModel.generateLinkingCode() },
+                        modifier = Modifier.align(Alignment.End).padding(end = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Generar otro código", fontSize = 12.sp)
+                    }
+                }
+                SettingsClickableRow(
+                    label = "Tengo un código",
+                    value = "Ingresar código de pareja",
+                    icon = Icons.Default.QrCodeScanner,
+                    onClick = { showLinkDialog = true }
+                )
+            }
+        }
 
         // --- SECCIÓN: PERFIL Y PERSONALIZACIÓN ---
         SettingsGroup(title = "Personalización") {
@@ -238,6 +311,60 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(48.dp))
 
         // --- DIÁLOGOS ---
+        if (showRelationDetailsDialog) {
+            AlertDialog(
+                onDismissRequest = { showRelationDetailsDialog = false },
+                title = { Text("Detalles de la Relación") },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("Integrantes:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                        members.forEach { member ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = LovePink)
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (member.name.isNotBlank()) member.name else "Usuario sin nombre")
+                            }
+                        }
+                        
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        
+                        Text("Código de Enlace:", fontWeight = FontWeight.Bold)
+                        val codeToShow = linkingCode ?: "Sin código generado"
+                        val formatted = codeToShow.chunked(4).joinToString("-")
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(formatted, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                            IconButton(onClick = {
+                                if (linkingCode != null) {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val clip = android.content.ClipData.newPlainText("Código de Enlace", linkingCode)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "Código copiado", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    loveViewModel.generateLinkingCode()
+                                }
+                            }) {
+                                Icon(if (linkingCode != null) Icons.Default.ContentCopy else Icons.Default.Refresh, contentDescription = "Acción")
+                            }
+                        }
+                        Text("Comparte este código para que más personas se unan a esta relación.", fontSize = 12.sp, color = Color.Gray)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showRelationDetailsDialog = false }) {
+                        Text("Cerrar")
+                    }
+                }
+            )
+        }
+
         if (showCategoriesDialog) {
             AlertDialog(
                 onDismissRequest = { showCategoriesDialog = false },
@@ -299,6 +426,54 @@ fun SettingsScreen(
                 },
                 confirmButton = { TextButton(onClick = { showWidgetDialog = false }) { Text("OK") } }
             )
+        }
+
+        if (showLinkDialog) {
+            com.lexnicholls.lovecounter.ui.components.LoveAlertDialog(
+                onDismissRequest = { showLinkDialog = false },
+                title = "Vincular con pareja",
+                onConfirm = {
+                    val rawCode = inputCode.text.filter { it.isDigit() }
+                    if (rawCode.length == 16) {
+                        loveViewModel.linkWithPartner(rawCode)
+                        showLinkDialog = false
+                    } else {
+                        Toast.makeText(context, "El código debe tener 16 dígitos", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            ) {
+                Column {
+                    Text("Ingresa el código de 16 dígitos generado por tu pareja.", fontSize = 14.sp, color = Color.Gray)
+                    Spacer(Modifier.height(16.dp))
+                    com.lexnicholls.lovecounter.ui.components.LoveTextField(
+                        value = inputCode,
+                        onValueChange = { newValue ->
+                            val digitsOnly = newValue.text.filter { it.isDigit() }
+                            val limitedDigits = if (digitsOnly.length > 16) digitsOnly.take(16) else digitsOnly
+                            
+                            // Re-formatear con guiones
+                            val formatted = limitedDigits.chunked(4).joinToString("-")
+                            
+                            // Si el texto ha cambiado, movemos el cursor al final de lo nuevo
+                            if (formatted != inputCode.text) {
+                                inputCode = TextFieldValue(
+                                    text = formatted,
+                                    selection = TextRange(formatted.length)
+                                )
+                            } else {
+                                // Si solo ha cambiado la selección (el cursor), la mantenemos
+                                inputCode = newValue
+                            }
+                        },
+                        label = "Código de Enlace",
+                        placeholder = "1234-5678-9012-3456",
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                    )
+                    if (isLinking) {
+                        CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp).align(Alignment.CenterHorizontally))
+                    }
+                }
+            }
         }
     }
 }

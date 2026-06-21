@@ -52,14 +52,13 @@ import kotlin.math.roundToInt
 fun BucketListScreen(
     deviceId: String,
     userName: String,
+    userId: String,
     showAddDialog: Boolean,
     onDismissDialog: () -> Unit,
     onCompletedViewToggled: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
-    val auth = FirebaseAuth.getInstance()
-    val userId = auth.currentUser?.uid ?: "global"
     
     var categories by remember { mutableStateOf<List<BucketCategory>>(emptyList()) }
     
