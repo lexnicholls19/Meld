@@ -1,22 +1,30 @@
 package com.lexnicholls.lovecounter.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.RotateRight
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.lexnicholls.lovecounter.ui.navigation.ThemeMode
+import com.lexnicholls.lovecounter.ui.theme.LovePink
 import com.lexnicholls.lovecounter.util.AppLanguage
 import com.lexnicholls.lovecounter.util.t
 
@@ -48,382 +56,167 @@ fun SettingsScreen(
     val strings = t()
     var tempName by remember { mutableStateOf(currentName) }
     var tempTitle by remember { mutableStateOf(currentMainTitle) }
+    var showCategoriesDialog by remember { mutableStateOf(false) }
+    var showWidgetDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp)
+            .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        
         Text(
             text = strings.settings,
-            fontSize = 28.sp,
+            fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 32.dp)
+            modifier = Modifier.padding(vertical = 16.dp)
         )
 
-        Text(
-            text = strings.userName,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
+        // --- SECCIÓN: PERFIL Y PERSONALIZACIÓN ---
+        SettingsGroup(title = "Personalización") {
+            SettingsInputRow(
+                label = strings.userName,
                 value = tempName,
                 onValueChange = { tempName = it },
-                placeholder = { Text(strings.writeName) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                onSave = { onNameChange(tempName.trim()) },
+                icon = Icons.Default.Person
             )
             
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            Button(
-                onClick = {
-                    val trimmed = tempName.trim()
-                    onNameChange(trimmed)
-                    Toast.makeText(context, "${strings.save}: $trimmed", Toast.LENGTH_SHORT).show()
+            SettingsInputRow(
+                label = strings.mainTitle,
+                value = tempTitle,
+                onValueChange = { tempTitle = it },
+                onSave = { onMainTitleChange(tempTitle) },
+                icon = Icons.Default.Title
+            )
+        }
+
+        // --- SECCIÓN: APARIENCIA ---
+        SettingsGroup(title = "Apariencia") {
+            // Tema
+            SettingsDropdownRow(
+                label = strings.appTheme,
+                currentValue = when(currentTheme) {
+                    ThemeMode.Light -> strings.light
+                    ThemeMode.Dark -> strings.dark
+                    ThemeMode.System -> strings.system
                 },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(56.dp)
+                icon = Icons.Default.Palette
             ) {
-                Text(strings.save)
+                ThemeMode.entries.forEach { mode ->
+                    val label = when(mode) {
+                        ThemeMode.Light -> strings.light
+                        ThemeMode.Dark -> strings.dark
+                        ThemeMode.System -> strings.system
+                    }
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = { onThemeChange(mode) }
+                    )
+                }
+            }
+
+            // Idioma
+            val currentLangLabel = AppLanguage.entries.find { it.code == currentLanguage }?.label ?: strings.system
+            SettingsDropdownRow(
+                label = strings.language,
+                currentValue = currentLangLabel,
+                icon = Icons.Default.Language
+            ) {
+                AppLanguage.entries.forEach { language ->
+                    DropdownMenuItem(
+                        text = { Text(language.label) },
+                        onClick = { onLanguageChange(language.code) }
+                    )
+                }
+            }
+        }
+
+        // --- SECCIÓN: CONTENIDO Y WIDGET ---
+        SettingsGroup(title = "Contenido") {
+            // Categorías Visibles (Diálogo para no saturar)
+            SettingsClickableRow(
+                label = strings.visibleCategoriesLabel,
+                value = "${currentVisibleCategories.size} seleccionadas",
+                icon = Icons.Default.Visibility,
+                onClick = { showCategoriesDialog = true }
+            )
+
+            // Configuración Widget
+            SettingsClickableRow(
+                label = strings.widgetContent,
+                value = "${currentWidgetConfigs.size} módulos",
+                icon = Icons.Default.Widgets,
+                onClick = { showWidgetDialog = true }
+            )
+
+            // Auto-rotar Switch
+            SettingsSwitchRow(
+                label = strings.dynamicWidget,
+                subtitle = strings.dynamicWidgetDesc,
+                checked = isAutoRotateEnabled,
+                onCheckedChange = onAutoRotateChange,
+                icon = Icons.AutoMirrored.Filled.RotateRight
+            )
+        }
+
+        // --- SECCIÓN: SISTEMA ---
+        SettingsGroup(title = "Sistema") {
+            // Moneda
+            SettingsDropdownRow(
+                label = strings.localCurrency,
+                currentValue = currentCurrency,
+                icon = Icons.Default.Payments
+            ) {
+                listOf("COP", "USD", "EUR").forEach { currency ->
+                    DropdownMenuItem(
+                        text = { Text(currency) },
+                        onClick = { onCurrencyChange(currency) }
+                    )
+                }
+            }
+
+            // Info de dispositivo
+            SettingsClickableRow(
+                label = "ID del Dispositivo",
+                value = currentDeviceId.take(8) + "...",
+                icon = Icons.Default.Fingerprint,
+                onClick = { /* Solo informativo o copiar */ }
+            )
+        }
+
+        // --- SECCIÓN: CUENTA Y ADMIN ---
+        val privateUserIds = remember { setOf("CX4z9DcQYxTJeaIdyNgzpDQqw6U2", "pW562p0UqNfEicrVd0q3oRRE9373") }
+        val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
+
+        if (currentUserId in privateUserIds) {
+            SettingsGroup(title = "Administración") {
+                SettingsClickableRow(
+                    label = "Sincronizar Datos",
+                    value = "Actualizar Firebase",
+                    icon = Icons.Default.CloudSync,
+                    onClick = {
+                        onSyncQuestions()
+                        Toast.makeText(context, "Sincronizando...", Toast.LENGTH_SHORT).show()
+                    }
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = strings.mainTitle,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = tempTitle,
-                onValueChange = { tempTitle = it },
-                placeholder = { Text(strings.mainTitle) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            Button(
-                onClick = {
-                    onMainTitleChange(tempTitle)
-                    Toast.makeText(context, strings.apply, Toast.LENGTH_SHORT).show()
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(56.dp)
-            ) {
-                Text(strings.apply)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = strings.language,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        var languageExpanded by remember { mutableStateOf(false) }
-        val currentLangLabel = AppLanguage.entries.find { it.code == currentLanguage }?.label ?: t().system
-
-        ExposedDropdownMenuBox(
-            expanded = languageExpanded,
-            onExpandedChange = { languageExpanded = !languageExpanded },
-            modifier = Modifier.width(200.dp)
-        ) {
-            OutlinedTextField(
-                value = currentLangLabel,
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = languageExpanded) },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-            ExposedDropdownMenu(
-                expanded = languageExpanded,
-                onDismissRequest = { languageExpanded = false }
-            ) {
-                AppLanguage.entries.forEach { language ->
-                    DropdownMenuItem(
-                        text = { Text(language.label) },
-                        onClick = {
-                            onLanguageChange(language.code)
-                            languageExpanded = false
-                        }
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = strings.visibleCategoriesLabel,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-        ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                val toggleVisible = { category: String, isVisible: Boolean ->
-                    val newSet = if (isVisible) currentVisibleCategories + category else currentVisibleCategories - category
-                    onVisibleCategoriesChange(newSet)
-                }
-
-                WidgetOption(
-                    text = strings.reminders,
-                    isSelected = currentVisibleCategories.contains("reminders"),
-                    onToggle = { toggleVisible("reminders", it) }
-                )
-                WidgetOption(
-                    text = strings.dates,
-                    isSelected = currentVisibleCategories.contains("dates"),
-                    onToggle = { toggleVisible("dates", it) }
-                )
-                WidgetOption(
-                    text = strings.market,
-                    isSelected = currentVisibleCategories.contains("market"),
-                    onToggle = { toggleVisible("market", it) }
-                )
-                WidgetOption(
-                    text = strings.bucket,
-                    isSelected = currentVisibleCategories.contains("bucket"),
-                    onToggle = { toggleVisible("bucket", it) }
-                )
-                WidgetOption(
-                    text = strings.movies,
-                    isSelected = currentVisibleCategories.contains("movies"),
-                    onToggle = { toggleVisible("movies", it) }
-                )
-                WidgetOption(
-                    text = strings.daily,
-                    isSelected = currentVisibleCategories.contains("daily"),
-                    onToggle = { toggleVisible("daily", it) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = t().widgetContent,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-        ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                val toggleConfig = { config: String, isSelected: Boolean ->
-                    val newSet = if (isSelected) currentWidgetConfigs + config else currentWidgetConfigs - config
-                    if (newSet.isNotEmpty()) onWidgetConfigsChange(newSet)
-                }
-
-                WidgetOption(
-                    text = t().timer,
-                    isSelected = currentWidgetConfigs.contains("Timer"),
-                    onToggle = { toggleConfig("Timer", it) }
-                )
-                WidgetOption(
-                    text = t().reminders,
-                    isSelected = currentWidgetConfigs.contains("Reminders"),
-                    onToggle = { toggleConfig("Reminders", it) }
-                )
-                WidgetOption(
-                    text = t().dates,
-                    isSelected = currentWidgetConfigs.contains("Dates"),
-                    onToggle = { toggleConfig("Dates", it) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = t().dynamicWidget,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = t().dynamicWidgetDesc,
-                        fontSize = 12.sp,
-                        color = Color.Gray
-                    )
-                }
-                Switch(
-                    checked = isAutoRotateEnabled,
-                    onCheckedChange = onAutoRotateChange
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = t().localCurrency,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        val currencies = listOf("COP", "USD", "EUR")
-        var expanded by remember { mutableStateOf(false) }
-
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
-            modifier = Modifier.width(150.dp)
-        ) {
-            OutlinedTextField(
-                value = currentCurrency,
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                currencies.forEach { currency ->
-                    DropdownMenuItem(
-                        text = { Text(currency) },
-                        onClick = {
-                            onCurrencyChange(currency)
-                            expanded = false
-                        }
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = t().currencyDesc,
-            fontSize = 14.sp,
-            color = Color.Gray
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = t().appTheme,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ThemeOption(t().light, ThemeMode.Light, currentTheme, onThemeChange)
-                ThemeOption(t().dark, ThemeMode.Dark, currentTheme, onThemeChange)
-                ThemeOption(t().system, ThemeMode.System, currentTheme, onThemeChange)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = t().deviceInfo,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        
-        Text(
-            text = "ID: $currentDeviceId",
-            fontSize = 12.sp,
-            color = Color.Gray,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-
-        TextButton(
+        Button(
             onClick = onResetDeviceId,
-            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.error),
+            shape = RoundedCornerShape(12.dp)
         ) {
-            Text(t().resetId)
+            Icon(Icons.Default.Refresh, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(strings.resetId)
         }
-        
-        Text(
-            text = t().idWarning,
-            fontSize = 11.sp,
-            color = Color.Gray,
-            lineHeight = 16.sp
-        )
-
-        val privateUserIds = remember { setOf("CX4z9DcQYxTJeaIdyNgzpDQqw6U2", "pW562p0UqNfEicrVd0q3oRRE9373") }
-        val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
-
-        if (currentUserId in privateUserIds) {
-            Spacer(modifier = Modifier.height(32.dp))
-            Text(text = "Administración", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = {
-                    onSyncQuestions()
-                    Toast.makeText(context, "Sincronizando preguntas...", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Sincronizar Preguntas a Firebase")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(48.dp))
 
         Button(
             onClick = {
@@ -432,68 +225,181 @@ fun SettingsScreen(
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer)
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                contentColor = MaterialTheme.colorScheme.error
+            )
         ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
             Text("Cerrar Sesión")
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-    }
-}
+        Spacer(modifier = Modifier.height(48.dp))
 
-@Composable
-fun WidgetOption(
-    text: String,
-    isSelected: Boolean,
-    onToggle: (Boolean) -> Unit,
-    tooltip: String? = null
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onToggle(!isSelected) }
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(checked = isSelected, onCheckedChange = { onToggle(it) })
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = text, fontSize = 16.sp)
+        // --- DIÁLOGOS ---
+        if (showCategoriesDialog) {
+            AlertDialog(
+                onDismissRequest = { showCategoriesDialog = false },
+                title = { Text(strings.visibleCategoriesLabel) },
+                text = {
+                    Column {
+                        val categories = listOf(
+                            "reminders" to strings.reminders,
+                            "dates" to strings.dates,
+                            "market" to strings.market,
+                            "bucket" to strings.bucket,
+                            "movies" to strings.movies,
+                            "daily" to strings.daily
+                        )
+                        categories.forEach { (id, label) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    val newSet = if (currentVisibleCategories.contains(id)) currentVisibleCategories - id else currentVisibleCategories + id
+                                    onVisibleCategoriesChange(newSet)
+                                },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = currentVisibleCategories.contains(id), onCheckedChange = {
+                                    val newSet = if (it) currentVisibleCategories + id else currentVisibleCategories - id
+                                    onVisibleCategoriesChange(newSet)
+                                })
+                                Text(label)
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showCategoriesDialog = false }) { Text("OK") } }
+            )
         }
-        if (tooltip != null) {
-            Text(
-                text = tooltip,
-                fontSize = 12.sp,
-                color = Color.Gray,
-                modifier = Modifier.padding(start = 48.dp, bottom = 4.dp)
+
+        if (showWidgetDialog) {
+            AlertDialog(
+                onDismissRequest = { showWidgetDialog = false },
+                title = { Text(strings.widgetContent) },
+                text = {
+                    Column {
+                        val configs = listOf("Timer" to strings.timer, "Reminders" to strings.reminders, "Dates" to strings.dates)
+                        configs.forEach { (id, label) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    val newSet = if (currentWidgetConfigs.contains(id)) currentWidgetConfigs - id else currentWidgetConfigs + id
+                                    if (newSet.isNotEmpty()) onWidgetConfigsChange(newSet)
+                                },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = currentWidgetConfigs.contains(id), onCheckedChange = {
+                                    val newSet = if (it) currentWidgetConfigs + id else currentWidgetConfigs - id
+                                    if (newSet.isNotEmpty()) onWidgetConfigsChange(newSet)
+                                })
+                                Text(label)
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showWidgetDialog = false }) { Text("OK") } }
             )
         }
     }
 }
 
 @Composable
-fun RowScope.ThemeOption(
-    text: String,
-    mode: ThemeMode,
-    currentMode: ThemeMode,
-    onSelect: (ThemeMode) -> Unit
-) {
-    val isSelected = mode == currentMode
-    val containerColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Surface(
-        modifier = Modifier
-            .weight(1f)
-            .height(48.dp)
-            .clickable { onSelect(mode) },
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        contentColor = contentColor
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(text = text, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+        Text(
+            text = title.uppercase(),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = LovePink,
+            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                content()
+            }
         }
+    }
+}
+
+@Composable
+fun SettingsInputRow(label: String, value: String, onValueChange: (String) -> Unit, onSave: () -> Unit, icon: ImageVector) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, fontSize = 14.sp, color = Color.Gray)
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
+            )
+        }
+        IconButton(onClick = onSave) {
+            Icon(Icons.Default.Check, contentDescription = "Guardar", tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+fun SettingsDropdownRow(label: String, currentValue: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = label, fontSize = 14.sp, color = Color.Gray)
+                Text(text = currentValue, fontSize = 16.sp)
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Gray)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            // Pasamos una lambda que cierre el menú además de la acción
+            Column {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsClickableRow(label: String, value: String, icon: ImageVector, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, fontSize = 14.sp, color = Color.Gray)
+            Text(text = value, fontSize = 16.sp)
+        }
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray)
+    }
+}
+
+@Composable
+fun SettingsSwitchRow(label: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, fontSize = 16.sp)
+            Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

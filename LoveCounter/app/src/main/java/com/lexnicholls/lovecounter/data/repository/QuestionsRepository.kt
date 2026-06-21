@@ -285,6 +285,15 @@ object QuestionsRepository {
         return getQuestionsForUser().random()
     }
 
+    fun getDailyQuestion(): String {
+        val questions = getQuestionsForUser()
+        if (questions.isEmpty()) return ""
+        val today = java.time.LocalDate.now().toString()
+        val seed = today.hashCode().toLong()
+        val random = java.util.Random(seed)
+        return questions[random.nextInt(questions.size)]
+    }
+
     fun getUniqueQuestion(usedQuestions: List<String>): String {
         val questions = getQuestionsForUser()
         val availableQuestions = questions.filter { it !in usedQuestions }

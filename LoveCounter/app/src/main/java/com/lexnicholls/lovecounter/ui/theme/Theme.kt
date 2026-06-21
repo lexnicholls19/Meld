@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -18,23 +19,19 @@ import androidx.core.view.WindowCompat
 private val DarkColorScheme = darkColorScheme(
     primary = LovePink,
     secondary = SecondaryColor,
-    tertiary = TertiaryColor
+    tertiary = TertiaryColor,
+    background = Color.Transparent,
+    surface = Color(0xFF1E293B), // Un azul grisáceo que resalta sobre el fondo oscuro
+    surfaceVariant = Color(0xFF334155)
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = LovePink,
     secondary = SecondaryColor,
-    tertiary = TertiaryColor
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    tertiary = TertiaryColor,
+    background = Color.Transparent,
+    surface = Color(0xE6FFFFFF), // Blanco semi-transparente
+    surfaceVariant = Color.White   // Forzamos que las variantes también sean blancas
 )
 
 @Composable

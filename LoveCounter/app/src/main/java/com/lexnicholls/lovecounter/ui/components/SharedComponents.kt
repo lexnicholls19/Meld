@@ -1,11 +1,14 @@
 package com.lexnicholls.lovecounter.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -16,9 +19,27 @@ import com.lexnicholls.lovecounter.ui.theme.LovePink
 
 @Composable
 fun AppBackground(content: @Composable () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    val isDark = isSystemInDarkTheme()
+    
+    // Definimos los colores del gradiente para ambos temas
+    val gradientColors = if (isDark) {
+        listOf(
+            Color(0xFF0F172A), // Azul marino muy oscuro
+            Color(0xFF1E293B), // Azul noche
+            Color(0xFF4C0519)  // Fucsia/Borgonia muy oscuro para el toque final
+        )
+    } else {
+        listOf(
+            Color(0xFFEBE3FF), // Lila pastel vibrante
+            Color(0xFFF7F2FF), // Lavanda muy claro
+            Color(0xFFFFD9E2)  // Rosado pastel vibrante
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(gradientColors))
     ) {
         content()
     }
@@ -38,11 +59,12 @@ fun HorizontalDivider(modifier: Modifier = Modifier, color: Color = Color.LightG
 @Composable
 fun LoveAlertDialog(
     onDismissRequest: () -> Unit,
-    title: String,
+    title: String = "",
     confirmButtonText: String = t().confirm,
     dismissButtonText: String = t().cancel,
     onConfirm: () -> Unit,
     showDismissButton: Boolean = true,
+    titleContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     AlertDialog(
@@ -50,12 +72,16 @@ fun LoveAlertDialog(
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
-            Text(
-                text = title,
-                color = LovePink,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
-            )
+            if (titleContent != null) {
+                titleContent()
+            } else if (title.isNotEmpty()) {
+                Text(
+                    text = title,
+                    color = LovePink,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            }
         },
         text = {
             Box(modifier = Modifier.padding(top = 8.dp)) {

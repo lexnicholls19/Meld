@@ -362,28 +362,29 @@ fun DateRow(
 
                     // Countdown of days remaining
                     val today = LocalDate.now()
-                    val targetDate = Instant.ofEpochMilli(item.date.toDate().time)
+                    val originalDate = Instant.ofEpochMilli(item.date.toDate().time)
                         .atZone(ZoneOffset.UTC)
                         .toLocalDate()
                     
-                    // Logic to find the NEXT occurrence of the date if it's an anniversary/birthday
-                    // We assume these are recurring events. 
-                    // However, your screenshot shows "2025", so we'll just calculate from today to the stored date.
-                    val daysRemaining = ChronoUnit.DAYS.between(today, targetDate)
+                    // Logic to find the NEXT occurrence of the date (anniversary/birthday)
+                    var nextOccurrence = originalDate.withYear(today.year)
+                    if (nextOccurrence.isBefore(today)) {
+                        nextOccurrence = nextOccurrence.plusYears(1)
+                    }
                     
-                    if (daysRemaining >= 0) {
-                        Surface(
-                            color = DatesColor.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "faltan $daysRemaining d",
-                                color = DatesColor,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                    val daysRemaining = ChronoUnit.DAYS.between(today, nextOccurrence)
+                    
+                    Surface(
+                        color = DatesColor.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "faltan $daysRemaining d",
+                            color = DatesColor,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     
                     if (isSelected) {

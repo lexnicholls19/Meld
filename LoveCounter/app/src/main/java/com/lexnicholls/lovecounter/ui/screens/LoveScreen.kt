@@ -60,12 +60,6 @@ fun LoveScreen(
     val startDate = viewModel.startDate
     val currentTime by viewModel.currentTime
     
-    val partnerStatus by viewModel.partnerStatus
-    val myStatus by viewModel.myStatus
-    var showStatusDialog by rememberSaveable { mutableStateOf(false) }
-
-    val isRefreshing by viewModel.isRefreshing
-
     // El ViewModel se encarga de escuchar los cambios
     DisposableEffect(userName) {
         viewModel.listenToStatuses(userName)
@@ -79,9 +73,6 @@ fun LoveScreen(
     
     val duration = remember(currentTime) { Duration.between(startDate, currentTime) }
     val totalDays by remember(duration) { derivedStateOf { duration.toDays() } }
-    val hours by remember(duration) { derivedStateOf { duration.toHours() % 24 } }
-    val minutes by remember(duration) { derivedStateOf { duration.toMinutes() % 60 } }
-    val seconds by remember(duration) { derivedStateOf { duration.seconds % 60 } }
 
     // Check for Milestones (e.g., every 100 days or round numbers)
     LaunchedEffect(totalDays) {
@@ -90,58 +81,7 @@ fun LoveScreen(
         }
     }
 
-    if (showStatusDialog) {
-        LoveAlertDialog(
-            onDismissRequest = { showStatusDialog = false },
-            title = t().howDoYouFeel,
-            showDismissButton = false,
-            onConfirm = { showStatusDialog = false },
-            confirmButtonText = t().close
-        ) {
-            val emojis = listOf("😊", "🥰", "😍", "😴", "🤔", "😢", "😤", "🤢", "🤒")
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    emojis.take(5).forEach { emoji ->
-                        Text(
-                            text = emoji,
-                            fontSize = 32.sp,
-                            modifier = Modifier.clickable {
-                                viewModel.updateStatus(userName, deviceId, emoji)
-                                // También enviamos una notificación para que la pareja se entere del cambio de estado
-                                sendInterpretedNotification(context, "Estado", "Nuevo estado de $userName: $emoji", userName)
-                                showStatusDialog = false
-                            }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    emojis.drop(5).forEach { emoji ->
-                        Text(
-                            text = emoji,
-                            fontSize = 32.sp,
-                            modifier = Modifier.clickable {
-                                viewModel.updateStatus(userName, deviceId, emoji)
-                                // También enviamos una notificación para que la pareja se entere del cambio de estado
-                                sendInterpretedNotification(context, "Estado", "Nuevo estado de $userName: $emoji", userName)
-                                showStatusDialog = false
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = { viewModel.refresh() },
+    Box(
         modifier = Modifier.fillMaxSize()
     ) {
         Column(
@@ -177,7 +117,7 @@ fun LoveScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -212,39 +152,6 @@ fun LoveScreen(
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "$hours ${strings.hoursShort} $minutes ${strings.minutesShort} $seconds ${strings.secondsShort}",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = LovePink
-                        )
-                    }
-                    
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = strings.partner, fontSize = 12.sp, color = Color.Gray)
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.Gray.copy(alpha = 0.1f)
-                        ) {
-                            Text(
-                                text = partnerStatus, 
-                                fontSize = 32.sp,
-                                modifier = Modifier.padding(4.dp)
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(text = strings.me, fontSize = 12.sp, color = Color.Gray)
-                        Surface(
-                            modifier = Modifier.clickable { showStatusDialog = true },
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                        ) {
-                            Text(
-                                text = myStatus, 
-                                fontSize = 32.sp,
-                                modifier = Modifier.padding(4.dp)
-                            )
-                        }
                     }
                 }
             }
@@ -408,7 +315,7 @@ fun DashboardTile(
             ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),

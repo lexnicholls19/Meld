@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -107,7 +108,31 @@ fun BucketListScreen(
 
         LoveAlertDialog(
             onDismissRequest = onDismissDialog,
-            title = "Añadir nuevo",
+            titleContent = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Añadir nuevo",
+                        color = com.lexnicholls.lovecounter.ui.theme.LovePink,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("P", fontSize = 12.sp, color = if (!isSubItemMode) MaterialTheme.colorScheme.onSurface else Color.Gray)
+                        Switch(
+                            checked = isSubItemMode,
+                            onCheckedChange = { isSubItemMode = it },
+                            modifier = Modifier.padding(horizontal = 4.dp).scale(0.7f)
+                        )
+                        Text("H", fontSize = 12.sp, color = if (isSubItemMode) MaterialTheme.colorScheme.onSurface else Color.Gray)
+                    }
+                }
+            },
             onConfirm = {
                 if (!isSubItemMode) {
                     if (categoryTitle.isNotBlank()) {
@@ -139,20 +164,6 @@ fun BucketListScreen(
             }
         ) {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("P", fontSize = 12.sp, color = if (!isSubItemMode) Color.White else Color.Gray)
-                    Switch(
-                        checked = isSubItemMode,
-                        onCheckedChange = { isSubItemMode = it },
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
-                    Text("H", fontSize = 12.sp, color = if (isSubItemMode) Color.White else Color.Gray)
-                }
-                Spacer(Modifier.height(16.dp))
                 if (!isSubItemMode) {
                     Text("Creando nueva categoría contenedora", fontSize = 12.sp, color = Color.Gray)
                     Spacer(Modifier.height(8.dp))

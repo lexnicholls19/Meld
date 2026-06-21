@@ -38,7 +38,7 @@ fun DailyConnectionScreen(
     val strings = t()
     val db = FirebaseFirestore.getInstance()
     
-    var currentQuestion by remember { mutableStateOf(QuestionsRepository.getRandomQuestion()) }
+    var currentQuestion by remember { mutableStateOf(QuestionsRepository.getDailyQuestion()) }
     var completedDates by remember { mutableStateOf(setOf<String>()) }
     val today = LocalDate.now()
     val todayStr = today.format(DateTimeFormatter.ISO_DATE)
@@ -104,6 +104,13 @@ fun DailyConnectionScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
+                        isToday -> {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .background(Color(0xFF4CAF50), CircleShape)
+                            )
+                        }
                         isFuture -> {
                             Box(
                                 modifier = Modifier
@@ -111,7 +118,7 @@ fun DailyConnectionScreen(
                                     .background(Color.White.copy(alpha = 0.3f), CircleShape)
                             )
                         }
-                        else -> { // Pasado o Hoy no completado
+                        else -> { // Pasado no completado
                             Icon(
                                 imageVector = Icons.Default.HeartBroken,
                                 contentDescription = null,
