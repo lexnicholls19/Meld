@@ -35,7 +35,6 @@ import com.lexnicholls.lovecounter.util.t
 fun SettingsScreen(
     currentTheme: ThemeMode,
     currentName: String,
-    currentDeviceId: String,
     currentWidgetConfigs: Set<String>,
     isAutoRotateEnabled: Boolean,
     currentCurrency: String,
@@ -50,7 +49,6 @@ fun SettingsScreen(
     onWidgetConfigsChange: (Set<String>) -> Unit,
     onAutoRotateChange: (Boolean) -> Unit,
     onCurrencyChange: (String) -> Unit,
-    onResetDeviceId: () -> Unit,
     onLogout: () -> Unit,
     onSyncQuestions: () -> Unit = {}
 ) {
@@ -250,14 +248,6 @@ fun SettingsScreen(
                     )
                 }
             }
-
-            // Info de dispositivo
-            SettingsClickableRow(
-                label = "ID del Dispositivo",
-                value = currentDeviceId.take(8) + "...",
-                icon = Icons.Default.Fingerprint,
-                onClick = { /* Solo informativo o copiar */ }
-            )
         }
 
         // --- SECCIÓN: CUENTA Y ADMIN ---
@@ -279,17 +269,6 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = onResetDeviceId,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.error),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Default.Refresh, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text(strings.resetId)
-        }
 
         Button(
             onClick = {

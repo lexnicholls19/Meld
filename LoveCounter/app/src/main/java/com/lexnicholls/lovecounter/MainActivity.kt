@@ -552,7 +552,6 @@ class MainActivity : ComponentActivity() {
                                             SettingsScreen(
                                                 currentTheme = themeMode,
                                                 currentName = userName,
-                                                currentDeviceId = deviceId,
                                                 currentWidgetConfigs = widgetConfigs,
                                                 isAutoRotateEnabled = autoRotateWidget,
                                                 currentCurrency = localCurrency,
@@ -596,11 +595,6 @@ class MainActivity : ComponentActivity() {
                                                 onCurrencyChange = { currency ->
                                                     localCurrency = currency
                                                     sharedPrefs.edit().putString("local_currency", currency).commit()
-                                                },
-                                                onResetDeviceId = {
-                                                    val newId = java.util.UUID.randomUUID().toString()
-                                                    sharedPrefs.edit().putString("device_id", newId).apply()
-                                                    Toast.makeText(context, "ID reiniciado. Por favor, reinicia la app.", Toast.LENGTH_LONG).show()
                                                 },
                                                 onLogout = {
                                                     navController.navigate(Screen.Login.name) {

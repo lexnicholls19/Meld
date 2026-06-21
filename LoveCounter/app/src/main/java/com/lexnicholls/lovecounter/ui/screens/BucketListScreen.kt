@@ -59,8 +59,10 @@ fun BucketListScreen(
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
+    val strings = com.lexnicholls.lovecounter.util.t()
     
     var categories by remember { mutableStateOf<List<BucketCategory>>(emptyList()) }
+    var expandedCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
     
     // Total Progress Calculation
     val totalItems = categories.sumOf { it.items.size }
@@ -211,7 +213,7 @@ fun BucketListScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = "Bucket List", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(text = strings.bucket, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -239,7 +241,11 @@ fun BucketListScreen(
                     category = category,
                     userId = userId,
                     db = db,
-                    userName = userName
+                    userName = userName,
+                    isExpanded = expandedCategoryId == category.id,
+                    onExpandedChange = { expanded ->
+                        expandedCategoryId = if (expanded) category.id else null
+                    }
                 )
             }
         }
@@ -251,13 +257,15 @@ fun CategoryItem(
     category: BucketCategory,
     userId: String,
     db: FirebaseFirestore,
-    userName: String
+    userName: String,
+    isExpanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
     var subItems by remember { mutableStateOf<List<BucketSubItem>>(emptyList()) }
     var showAddTaskDialog by remember { mutableStateOf(false) }
     var showEditCategoryDialog by remember { mutableStateOf(false) }
     var showDeleteCategoryDialog by remember { mutableStateOf(false) }
+    var editingSubItem by remember { mutableStateOf<BucketSubItem?>(null) }
 
     val completedCount = subItems.count { it.completed }
     val totalCount = subItems.size
@@ -352,6 +360,38 @@ fun CategoryItem(
         }
     }
 
+    if (editingSubItem != null) {
+        var text by remember { mutableStateOf(editingSubItem!!.title) }
+        var description by remember { mutableStateOf(editingSubItem!!.description) }
+        var location by remember { mutableStateOf(editingSubItem!!.location) }
+        
+        LoveAlertDialog(
+            onDismissRequest = { editingSubItem = null },
+            title = "Editar tarea",
+            onConfirm = {
+                if (text.isNotBlank()) {
+                    db.collection("users").document(userId)
+                        .collection("bucket_list").document(category.id)
+                        .collection("items").document(editingSubItem!!.id)
+                        .update(mapOf(
+                            "title" to text,
+                            "description" to description,
+                            "location" to location
+                        ))
+                    editingSubItem = null
+                }
+            }
+        ) {
+            Column {
+                LoveTextField(value = text, onValueChange = { text = it }, label = "Nombre")
+                Spacer(Modifier.height(8.dp))
+                LoveTextField(value = description, onValueChange = { description = it }, label = "Descripción")
+                Spacer(Modifier.height(8.dp))
+                LoveTextField(value = location, onValueChange = { location = it }, label = "Ubicación", isOptional = true)
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         // Parent Card (Fixed Layer)
         Card(
@@ -375,12 +415,12 @@ fun CategoryItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { expanded = !expanded }
+                        .clickable { onExpandedChange(!isExpanded) }
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
                         tint = Color.White
                     )
@@ -432,7 +472,7 @@ fun CategoryItem(
 
         // Child Items (Unfold from behind)
         AnimatedVisibility(
-            visible = expanded,
+            visible = isExpanded,
             enter = expandVertically() + fadeIn() + slideInVertically { -it / 2 },
             exit = shrinkVertically() + fadeOut() + slideOutVertically { -it / 2 }
         ) {
@@ -462,7 +502,8 @@ fun CategoryItem(
                                 db.collection("users").document(userId)
                                     .collection("bucket_list").document(category.id)
                                     .collection("items").document(subItem.id).delete()
-                            }
+                            },
+                            onClick = { editingSubItem = subItem }
                         )
                     }
                 }
@@ -475,7 +516,8 @@ fun CategoryItem(
 fun SubItemRow(
     subItem: BucketSubItem,
     onToggle: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -492,6 +534,7 @@ fun SubItemRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .padding(vertical = 4.dp)
             .draggable(
                 orientation = Orientation.Horizontal,
@@ -530,7 +573,8 @@ fun SubItemRow(
         Surface(
             modifier = Modifier
                 .offset { IntOffset(animatedOffset.roundToInt(), 0) }
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .clickable { onClick() },
             color = if (subItem.completed) Color(0xFF1C1C1E) else Color(0xFF2C2C2E),
             shape = RoundedCornerShape(12.dp)
         ) {
@@ -551,20 +595,29 @@ fun SubItemRow(
                     }
                     if (subItem.location.isNotBlank()) {
                         Row(
-                            modifier = Modifier
-                                .padding(top = 4.dp)
-                                .clickable {
-                                    val uri = Uri.parse("geo:0,0?q=${Uri.encode(subItem.location)}")
-                                    val intent = Intent(Intent.ACTION_VIEW, uri)
-                                    intent.setPackage("com.google.android.apps.maps")
-                                    context.startActivity(intent)
-                                },
+                            modifier = Modifier.padding(top = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(12.dp), tint = Color.Red)
+                            Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(12.dp), tint = Color.Red.copy(alpha = 0.6f))
                             Spacer(Modifier.width(4.dp))
                             Text(text = subItem.location, fontSize = 11.sp, color = Color.Gray)
                         }
+                    }
+                }
+
+                if (subItem.location.isNotBlank()) {
+                    IconButton(onClick = {
+                        val uri = Uri.parse("geo:0,0?q=${Uri.encode(subItem.location)}")
+                        val intent = Intent(Intent.ACTION_VIEW, uri)
+                        intent.setPackage("com.google.android.apps.maps")
+                        context.startActivity(intent)
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Map,
+                            contentDescription = "Ver en mapa",
+                            tint = com.lexnicholls.lovecounter.ui.theme.LovePink,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }

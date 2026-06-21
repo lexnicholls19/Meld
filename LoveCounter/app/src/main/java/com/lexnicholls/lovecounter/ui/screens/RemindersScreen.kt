@@ -82,11 +82,24 @@ fun RemindersScreen(
                             location = doc.getString("location") ?: "",
                             dueDate = doc.getTimestamp("dueDate"),
                             completed = doc.getBoolean("completed") ?: false,
-                            addedBy = doc.getString("addedBy") ?: "Alguien"
+                            addedBy = doc.getString("addedBy") ?: "Alguien",
+                            timestamp = doc.getTimestamp("timestamp") ?: Timestamp.now()
                         )
                     }
-                    pendingReminders = allItems.filter { !it.completed }
-                    completedReminders = allItems.filter { it.completed }
+                    
+                    // Función de ordenado: 
+                    // 1. Los que tienen fecha (dueDate) van primero, ordenados de más cercana a lejana.
+                    // 2. Los que NO tienen fecha van después, ordenados por timestamp de creación (el más nuevo arriba).
+                    fun sortReminders(list: List<ReminderItem>): List<ReminderItem> {
+                        return list.sortedWith(
+                            compareBy<ReminderItem> { it.dueDate == null } // False (con fecha) va antes que True (sin fecha)
+                                .thenBy { it.dueDate?.seconds ?: Long.MAX_VALUE } // De más cercano a más lejano (o final de la lista)
+                                .thenByDescending { it.timestamp.seconds } // Entre los sin fecha, el más nuevo arriba
+                        )
+                    }
+
+                    pendingReminders = sortReminders(allItems.filter { !it.completed })
+                    completedReminders = sortReminders(allItems.filter { it.completed })
                 }
             }
         onDispose { registration.remove() }
@@ -523,5 +536,6 @@ data class ReminderItem(
     val location: String = "",
     val dueDate: Timestamp? = null,
     val completed: Boolean,
-    val addedBy: String
+    val addedBy: String,
+    val timestamp: Timestamp = Timestamp.now()
 )

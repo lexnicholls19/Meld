@@ -117,12 +117,22 @@ fun LoveTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     modifier: Modifier = Modifier
 ) {
-    val labelText = if (isOptional) "$label (${t().optionalShort})" else label
-    
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(labelText) },
+        label = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label)
+                if (isOptional) {
+                    Text(
+                        text = "(${t().optionalShort})",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+            }
+        },
         placeholder = { if (placeholder.isNotEmpty()) Text(placeholder) },
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -146,12 +156,22 @@ fun LoveTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     modifier: Modifier = Modifier
 ) {
-    val labelText = if (isOptional) "$label (${t().optionalShort})" else label
-    
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(labelText) },
+        label = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label)
+                if (isOptional) {
+                    Text(
+                        text = "(${t().optionalShort})",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+            }
+        },
         placeholder = { if (placeholder.isNotEmpty()) Text(placeholder) },
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),

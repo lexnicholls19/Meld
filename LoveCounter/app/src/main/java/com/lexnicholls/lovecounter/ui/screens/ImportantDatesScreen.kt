@@ -244,11 +244,16 @@ fun ImportantDatesScreen(
             Text(text = t().dates, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
         }
 
+        // Sort dates by remaining days
+        val sortedDates = remember(dates) {
+            dates.sortedBy { calculateDaysRemaining(it.date) }
+        }
+
         LazyColumn(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(dates, key = { it.id }) { item ->
+            items(sortedDates, key = { it.id }) { item ->
                 val isSelected = selectedIds.contains(item.id)
                 DateRow(
                     item = item,
@@ -271,6 +276,21 @@ fun ImportantDatesScreen(
             }
         }
     }
+}
+
+fun calculateDaysRemaining(dateTimestamp: Timestamp): Long {
+    val today = LocalDate.now()
+    val originalDate = Instant.ofEpochMilli(dateTimestamp.toDate().time)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+
+    // Logic to find the NEXT occurrence of the date (anniversary/birthday)
+    var nextOccurrence = originalDate.withYear(today.year)
+    if (nextOccurrence.isBefore(today)) {
+        nextOccurrence = nextOccurrence.plusYears(1)
+    }
+
+    return ChronoUnit.DAYS.between(today, nextOccurrence)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -360,18 +380,7 @@ fun DateRow(
                     }
 
                     // Countdown of days remaining
-                    val today = LocalDate.now()
-                    val originalDate = Instant.ofEpochMilli(item.date.toDate().time)
-                        .atZone(ZoneOffset.UTC)
-                        .toLocalDate()
-                    
-                    // Logic to find the NEXT occurrence of the date (anniversary/birthday)
-                    var nextOccurrence = originalDate.withYear(today.year)
-                    if (nextOccurrence.isBefore(today)) {
-                        nextOccurrence = nextOccurrence.plusYears(1)
-                    }
-                    
-                    val daysRemaining = ChronoUnit.DAYS.between(today, nextOccurrence)
+                    val daysRemaining = calculateDaysRemaining(item.date)
                     
                     Surface(
                         color = DatesColor.copy(alpha = 0.2f),
