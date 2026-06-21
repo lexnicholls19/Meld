@@ -53,6 +53,8 @@ import nl.dionsegijn.konfetti.core.models.Shape
 import com.lexnicholls.lovecounter.ui.theme.*
 import java.util.concurrent.TimeUnit
 import com.google.firebase.auth.FirebaseAuth
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.lexnicholls.lovecounter.viewmodel.LoveViewModel
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -529,6 +531,16 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         composable(Screen.Settings.name) {
+                                            val loveViewModel: LoveViewModel = hiltViewModel()
+                                            
+                                            val syncStatus by loveViewModel.syncStatus
+                                            LaunchedEffect(syncStatus) {
+                                                syncStatus?.let {
+                                                    Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                                    loveViewModel.clearSyncStatus()
+                                                }
+                                            }
+
                                             SettingsScreen(
                                                 currentTheme = themeMode,
                                                 currentName = userName,
@@ -586,6 +598,9 @@ class MainActivity : ComponentActivity() {
                                                     navController.navigate(Screen.Login.name) {
                                                         popUpTo(0) { inclusive = true }
                                                     }
+                                                },
+                                                onSyncQuestions = {
+                                                    loveViewModel.syncQuestionsToFirebase()
                                                 }
                                             )
                                         }

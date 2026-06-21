@@ -41,7 +41,8 @@ fun SettingsScreen(
     onAutoRotateChange: (Boolean) -> Unit,
     onCurrencyChange: (String) -> Unit,
     onResetDeviceId: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onSyncQuestions: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val strings = t()
@@ -402,6 +403,25 @@ fun SettingsScreen(
             color = Color.Gray,
             lineHeight = 16.sp
         )
+
+        val privateUserIds = remember { setOf("CX4z9DcQYxTJeaIdyNgzpDQqw6U2", "pW562p0UqNfEicrVd0q3oRRE9373") }
+        val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
+
+        if (currentUserId in privateUserIds) {
+            Spacer(modifier = Modifier.height(32.dp))
+            Text(text = "Administración", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    onSyncQuestions()
+                    Toast.makeText(context, "Sincronizando preguntas...", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Sincronizar Preguntas a Firebase")
+            }
+        }
 
         Spacer(modifier = Modifier.height(48.dp))
 
