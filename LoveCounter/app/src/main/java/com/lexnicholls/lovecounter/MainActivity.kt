@@ -109,7 +109,10 @@ class MainActivity : ComponentActivity() {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentDestination = navBackStackEntry?.destination
             
-            var themeMode by rememberSaveable { mutableStateOf(ThemeMode.System) }
+            var themeMode by rememberSaveable { 
+                val saved = sharedPrefs.getString("app_theme", ThemeMode.System.name) ?: ThemeMode.System.name
+                mutableStateOf(ThemeMode.valueOf(saved))
+            }
             var userName by rememberSaveable { mutableStateOf(sharedPrefs.getString("user_name", "") ?: "") }
             var widgetConfigs by rememberSaveable { 
                 val saved = sharedPrefs.getString("widget_configs", "Timer") ?: "Timer"
@@ -127,13 +130,29 @@ class MainActivity : ComponentActivity() {
             var appLanguage by rememberSaveable {
                 mutableStateOf(sharedPrefs.getString("app_language", "system") ?: "system")
             }
+            var relationshipDate by rememberSaveable {
+                val saved = sharedPrefs.getLong("relationship_date", -1L)
+                mutableStateOf(if (saved == -1L) null else saved)
+            }
             var visibleCategories by rememberSaveable {
-                val saved = sharedPrefs.getString("visible_categories", "reminders,dates,market,bucket,daily,movies") ?: "reminders,dates,market,bucket,daily,movies"
+                val default = "reminders,dates,market,bucket,drawing,daily,movies"
+                val saved = sharedPrefs.getString("visible_categories", default) ?: default
                 mutableStateOf(saved.split(",").filter { it.isNotBlank() }.toSet())
             }
             var categoryOrder by rememberSaveable {
-                val saved = sharedPrefs.getString("category_order", "reminders,dates,market,bucket,daily,movies") ?: "reminders,dates,market,bucket,daily,movies"
-                mutableStateOf(saved.split(",").filter { it.isNotBlank() })
+                val allPossible = listOf("reminders", "dates", "market", "bucket", "drawing", "daily", "movies")
+                val saved = sharedPrefs.getString("category_order", null)
+                val currentList = if (saved == null) {
+                    allPossible
+                } else {
+                    val list = saved.split(",").filter { it.isNotBlank() }.toMutableList()
+                    // Migración: Agregar nuevas categorías que no estén en la lista guardada
+                    allPossible.forEach { cat ->
+                        if (!list.contains(cat)) list.add(cat)
+                    }
+                    list
+                }
+                mutableStateOf(currentList)
             }
 
             val useDarkTheme = when (themeMode) {
@@ -177,11 +196,13 @@ class MainActivity : ComponentActivity() {
                     var isCompletedViewOpen by rememberSaveable { mutableStateOf(false) }
                     var showExitDialog by rememberSaveable { mutableStateOf(false) }
                     var isGiftExpanded by rememberSaveable { mutableStateOf(false) }
+                    var isMainReorderMode by rememberSaveable { mutableStateOf(false) }
 
                     // Reset completed view state when changing screens
                     LaunchedEffect(currentDestination?.route) {
                         isCompletedViewOpen = false
                         isGiftExpanded = false
+                        isMainReorderMode = false
                     }
 
                     // Handle System Back Button
@@ -215,7 +236,7 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         floatingActionButton = {
                             val currentRoute = currentDestination?.route
-                            if (currentRoute == Screen.Main.name) {
+                            if (currentRoute == Screen.Main.name && !isMainReorderMode) {
                                 Column(
                                     horizontalAlignment = Alignment.End,
                                     verticalArrangement = Arrangement.Bottom
@@ -298,7 +319,8 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
-                            } else if (!isCompletedViewOpen && 
+                            } else if (!isMainReorderMode && 
+                                !isCompletedViewOpen &&
                                 currentRoute != Screen.DailyConnection.name && 
                                 currentRoute != Screen.Settings.name && 
                                 currentRoute != Screen.Movies.name &&
@@ -449,8 +471,15 @@ class MainActivity : ComponentActivity() {
                                             LoginScreen(
                                                 onNavigateToRegister = { navController.navigate(Screen.Register.name) },
                                                 onLoginSuccess = { 
-                                                    navController.navigate(Screen.Main.name) {
-                                                        popUpTo(Screen.Login.name) { inclusive = true }
+                                                    val isFirst = sharedPrefs.getBoolean("first_time_${FirebaseAuth.getInstance().currentUser?.uid}", true)
+                                                    if (isFirst) {
+                                                        navController.navigate(Screen.Welcome.name) {
+                                                            popUpTo(Screen.Login.name) { inclusive = true }
+                                                        }
+                                                    } else {
+                                                        navController.navigate(Screen.Main.name) {
+                                                            popUpTo(Screen.Login.name) { inclusive = true }
+                                                        }
                                                     }
                                                 }
                                             )
@@ -458,12 +487,29 @@ class MainActivity : ComponentActivity() {
                                         composable(Screen.Register.name) {
                                             RegisterScreen(
                                                 onNavigateToLogin = { navController.popBackStack() },
-                                                onRegisterSuccess = { navController.popBackStack() }
+                                                onRegisterSuccess = { 
+                                                    navController.navigate(Screen.Welcome.name) {
+                                                        popUpTo(Screen.Login.name) { inclusive = true }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                        composable(Screen.Welcome.name) {
+                                            WelcomeScreen(
+                                                onContinue = {
+                                                    val uid = FirebaseAuth.getInstance().currentUser?.uid
+                                                    if (uid != null) {
+                                                        sharedPrefs.edit().putBoolean("first_time_$uid", false).apply()
+                                                    }
+                                                    navController.navigate(Screen.Main.name) {
+                                                        popUpTo(Screen.Welcome.name) { inclusive = true }
+                                                    }
+                                                }
                                             )
                                         }
                                         composable(Screen.Main.name) {
                                             LoveScreen(
-                                                title = if (mainTitle.isNotBlank()) mainTitle else t().story,
+                                                title = mainTitle,
                                                 visibleCategories = visibleCategories,
                                                 categoryOrder = categoryOrder,
                                                 onOrderChange = { newOrder ->
@@ -472,6 +518,9 @@ class MainActivity : ComponentActivity() {
                                                 },
                                                 deviceId = deviceId,
                                                 userName = userName,
+                                                relationshipDate = relationshipDate,
+                                                isReorderMode = isMainReorderMode,
+                                                onReorderModeChange = { isMainReorderMode = it },
                                                 onNavigateToSecond = { navController.navigate(Screen.Second.name) },
                                                 onNavigateToThird = { navController.navigate(Screen.Third.name) },
                                                 onNavigateToFourth = { navController.navigate(Screen.Fourth.name) },
@@ -479,7 +528,15 @@ class MainActivity : ComponentActivity() {
                                                 onNavigateToBucketList = { navController.navigate(Screen.BucketList.name) },
                                                 onNavigateToMovies = { navController.navigate(Screen.Movies.name) },
                                                 onNavigateToDaily = { navController.navigate(Screen.DailyConnection.name) },
+                                                onNavigateToDrawing = { navController.navigate(Screen.Drawing.name) },
                                                 onTriggerConfetti = { showConfetti = true }
+                                            )
+                                        }
+                                        composable(Screen.Drawing.name) {
+                                            DrawingScreen(
+                                                userId = sharedId ?: "",
+                                                userName = userName,
+                                                onBack = { navController.popBackStack() }
                                             )
                                         }
                                         composable(Screen.Second.name) {
@@ -557,7 +614,11 @@ class MainActivity : ComponentActivity() {
                                                 currentMainTitle = mainTitle,
                                                 currentLanguage = appLanguage,
                                                 currentVisibleCategories = visibleCategories,
-                                                onThemeChange = { themeMode = it },
+                                                currentRelationshipDate = relationshipDate,
+                                                onThemeChange = { mode -> 
+                                                    themeMode = mode
+                                                    sharedPrefs.edit().putString("app_theme", mode.name).apply()
+                                                },
                                                 onNameChange = { newName ->
                                                     val trimmedName = newName.trim()
                                                     userName = trimmedName
@@ -574,6 +635,14 @@ class MainActivity : ComponentActivity() {
                                                 onVisibleCategoriesChange = { categories ->
                                                     visibleCategories = categories
                                                     sharedPrefs.edit().putString("visible_categories", categories.joinToString(",")).commit()
+                                                },
+                                                onRelationshipDateChange = { date ->
+                                                    relationshipDate = date
+                                                    if (date != null) {
+                                                        sharedPrefs.edit().putLong("relationship_date", date).commit()
+                                                    } else {
+                                                        sharedPrefs.edit().remove("relationship_date").commit()
+                                                    }
                                                 },
                                                 onWidgetConfigsChange = { configs ->
                                                     widgetConfigs = configs

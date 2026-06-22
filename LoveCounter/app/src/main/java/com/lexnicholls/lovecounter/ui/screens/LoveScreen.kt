@@ -3,11 +3,13 @@ package com.lexnicholls.lovecounter.ui.screens
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -23,8 +25,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,11 +37,11 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.lexnicholls.lovecounter.viewmodel.LoveViewModel
 import com.lexnicholls.lovecounter.util.t
+import com.lexnicholls.lovecounter.util.getStringsForLanguage
 import com.lexnicholls.lovecounter.ui.theme.*
 import java.util.Locale
 import java.time.Duration
 import java.time.Period
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -51,6 +55,9 @@ fun LoveScreen(
     onOrderChange: (List<String>) -> Unit,
     deviceId: String,
     userName: String,
+    relationshipDate: Long?,
+    isReorderMode: Boolean,
+    onReorderModeChange: (Boolean) -> Unit,
     onNavigateToSecond: () -> Unit,
     onNavigateToThird: () -> Unit,
     onNavigateToFourth: () -> Unit,
@@ -58,27 +65,39 @@ fun LoveScreen(
     onNavigateToBucketList: () -> Unit,
     onNavigateToMovies: () -> Unit,
     onNavigateToDaily: () -> Unit,
+    onNavigateToDrawing: () -> Unit,
     onTriggerConfetti: () -> Unit,
     viewModel: LoveViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val startDate = viewModel.startDate
+    val strings = t()
+
+    val startDate = remember(relationshipDate) {
+        relationshipDate?.let {
+            java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+        }
+    }
+    
     val currentTime by viewModel.currentTime
     
+    val period = remember(currentTime, startDate) { 
+        startDate?.let { Period.between(it.toLocalDate(), currentTime.toLocalDate()) }
+    }
+    val years = period?.years ?: 0
+    val months = period?.months ?: 0
+    val periodDays = period?.days ?: 0
+    
+    val duration = remember(currentTime, startDate) { 
+        startDate?.let { Duration.between(it, currentTime) }
+    }
+    val totalDays = duration?.toDays() ?: -1L
+
     DisposableEffect(userName) {
         viewModel.listenToStatuses(userName)
         onDispose { }
     }
 
-    val period = remember(currentTime) { Period.between(startDate.toLocalDate(), currentTime.toLocalDate()) }
-    val years = period.years
-    val months = period.months
-    val periodDays = period.days
-    
-    val duration = remember(currentTime) { Duration.between(startDate, currentTime) }
-    val totalDays = duration.toDays()
-
-    var isReorderMode by rememberSaveable { mutableStateOf(false) }
+    var draggingItemId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(totalDays) {
         if (totalDays > 0 && (totalDays % 100 == 0L || totalDays % 365 == 0L)) {
@@ -86,13 +105,13 @@ fun LoveScreen(
         }
     }
 
-    val strings = t()
     val allTiles = remember(strings) {
         listOf(
             TileData("reminders", strings.reminders, strings.remindersDesc, Icons.Default.Notifications, ReminderColor, onNavigateToSecond),
             TileData("dates", strings.dates, strings.datesDesc, Icons.Default.DateRange, DatesColor, onNavigateToThird),
             TileData("market", strings.market, strings.marketDesc, Icons.Default.ShoppingCart, MarketColor, onNavigateToFourth),
             TileData("bucket", strings.bucket, strings.bucketDesc, Icons.Default.Star, BucketColor, onNavigateToBucketList),
+            TileData("drawing", strings.drawing, strings.drawingDesc, Icons.Default.Brush, LovePink, onNavigateToDrawing),
             TileData("movies", strings.movies, strings.moviesDesc, Icons.Default.Movie, MoviesColor, onNavigateToMovies),
             TileData("daily", strings.daily, strings.dailyDesc, Icons.Default.FavoriteBorder, DailyColor, onNavigateToDaily)
         )
@@ -105,15 +124,25 @@ fun LoveScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(title, fontWeight = FontWeight.Bold, color = LovePink) },
+                title = { 
+                    AnimatedContent(targetState = isReorderMode) { reordering ->
+                        Text(
+                            text = if (reordering) strings.reorderCategories else title, 
+                            fontWeight = FontWeight.Bold, 
+                            color = LovePink,
+                            fontSize = if (reordering) 20.sp else 24.sp
+                        )
+                    }
+                },
                 actions = {
                     if (isReorderMode) {
-                        IconButton(onClick = { isReorderMode = false }) {
-                            Icon(Icons.Default.Check, contentDescription = "Guardar", tint = MaterialTheme.colorScheme.primary)
+                        IconButton(onClick = { onReorderModeChange(false) }) {
+                            Icon(Icons.Default.Check, contentDescription = strings.save, tint = MaterialTheme.colorScheme.primary)
                         }
-                    }
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = strings.settings, tint = Color.Gray)
+                    } else {
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = strings.settings, tint = Color.Gray)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
@@ -127,67 +156,75 @@ fun LoveScreen(
                 .padding(padding)
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            userScrollEnabled = !isReorderMode
         ) {
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Timer Hero Card
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                AnimatedVisibility(
+                    visible = !isReorderMode && startDate != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    Column {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                         ) {
-                            val dateFormatter = remember(strings) {
-                                java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", 
-                                    when(strings.settings) {
-                                        "Settings" -> Locale.ENGLISH
-                                        "Paramètres" -> Locale.FRENCH
-                                        "Einstellungen" -> Locale.GERMAN
-                                        "Configurações" -> Locale.forLanguageTag("pt")
-                                        else -> Locale.forLanguageTag("es")
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    val dateFormatter = remember(strings) {
+                                        java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", 
+                                            when(strings.settings) {
+                                                "Settings" -> Locale.ENGLISH
+                                                "Paramètres" -> Locale.FRENCH
+                                                "Einstellungen" -> Locale.GERMAN
+                                                "Configurações" -> Locale.forLanguageTag("pt")
+                                                else -> Locale.forLanguageTag("es")
+                                            }
+                                        )
                                     }
-                                )
+                                    startDate?.let {
+                                        Text(
+                                            text = "${strings.since} ${it.format(dateFormatter)}",
+                                            fontSize = 16.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "$years${strings.years} - $months${strings.months} - $periodDays${strings.days}",
+                                        fontSize = 32.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
                             }
-                            Text(
-                                text = "${strings.since} ${startDate.format(dateFormatter)}",
-                                fontSize = 16.sp,
-                                color = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "$years${strings.years} - $months${strings.months} - $periodDays${strings.days}",
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
                         }
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
                 }
             }
 
-            item {
-                if (isReorderMode) {
+            if (isReorderMode) {
+                item {
                     Text(
-                        text = "Modo edición: Arrastra las tarjetas para reordenar",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        text = strings.dragToReorder,
+                        fontSize = 14.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
 
             itemsIndexed(visibleTilesOrder, key = { _, id -> id }) { index, id ->
@@ -198,54 +235,67 @@ fun LoveScreen(
                     val fullOrder by rememberUpdatedState(categoryOrder)
 
                     var dragAmountY by remember { mutableStateOf(0f) }
+                    val density = LocalDensity.current
                     
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .animateItem()
-                            .offset { IntOffset(0, dragAmountY.roundToInt()) }
-                            .pointerInput(Unit) {
+                            .let { if (draggingItemId != id) it.animateItem() else it }
+                            .graphicsLayer {
+                                translationY = dragAmountY
+                            }
+                            .pointerInput(isReorderMode) {
                                 if (isReorderMode) {
                                     detectDragGestures(
-                                        onDragStart = { dragAmountY = 0f },
+                                        onDragStart = { 
+                                            dragAmountY = 0f 
+                                            draggingItemId = id
+                                        },
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             dragAmountY += dragAmount.y
                                             
-                                            // Adjusted threshold for better precision and speed control
-                                            // A larger value (like 250f) requires more finger movement per swap
-                                            val threshold = 250f 
-
-                                            if (dragAmountY > threshold && currentIndex < currentOrder.size - 1) {
+                                            val thresholdPx = with(density) { 100.dp.toPx() }
+                                            
+                                            if (dragAmountY > thresholdPx && currentIndex < currentOrder.size - 1) {
                                                 val newList = fullOrder.toMutableList()
                                                 val currentId = currentOrder[currentIndex]
                                                 val targetId = currentOrder[currentIndex + 1]
+                                                val cp = newList.indexOf(currentId)
+                                                val tp = newList.indexOf(targetId)
                                                 
-                                                val currentPos = newList.indexOf(currentId)
-                                                val targetPos = newList.indexOf(targetId)
-                                                
-                                                newList[currentPos] = targetId
-                                                newList[targetPos] = currentId
-                                                
+                                                newList[cp] = targetId
+                                                newList[tp] = currentId
                                                 onOrderChange(newList)
-                                                dragAmountY -= threshold 
-                                            } else if (dragAmountY < -threshold && currentIndex > 0) {
+                                                dragAmountY -= thresholdPx
+                                            } else if (dragAmountY < -thresholdPx && currentIndex > 0) {
                                                 val newList = fullOrder.toMutableList()
                                                 val currentId = currentOrder[currentIndex]
                                                 val targetId = currentOrder[currentIndex - 1]
+                                                val cp = newList.indexOf(currentId)
+                                                val tp = newList.indexOf(targetId)
                                                 
-                                                val currentPos = newList.indexOf(currentId)
-                                                val targetPos = newList.indexOf(targetId)
-                                                
-                                                newList[currentPos] = targetId
-                                                newList[targetPos] = currentId
-                                                
+                                                newList[cp] = targetId
+                                                newList[tp] = currentId
                                                 onOrderChange(newList)
-                                                dragAmountY += threshold
+                                                dragAmountY += thresholdPx
                                             }
                                         },
-                                        onDragEnd = { dragAmountY = 0f },
-                                        onDragCancel = { dragAmountY = 0f }
+                                        onDragEnd = { 
+                                            dragAmountY = 0f 
+                                            draggingItemId = null
+                                        },
+                                        onDragCancel = { 
+                                            dragAmountY = 0f 
+                                            draggingItemId = null
+                                        }
+                                    )
+                                } else {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { onReorderModeChange(true) },
+                                        onDrag = { _, _ -> },
+                                        onDragEnd = { },
+                                        onDragCancel = { }
                                     )
                                 }
                             }
@@ -256,7 +306,6 @@ fun LoveScreen(
                             icon = tile.icon,
                             color = tile.color,
                             onClick = { if (!isReorderMode) tile.onClick() },
-                            onLongClick = { isReorderMode = true },
                             isReorderMode = isReorderMode
                         )
                     }
@@ -287,16 +336,12 @@ fun DashboardTile(
     icon: ImageVector,
     color: Color,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {},
     isReorderMode: Boolean = false
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface
@@ -342,6 +387,8 @@ fun sendInterpretedNotification(context: Context, title: String, message: String
     val sharedPrefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
     val deviceId = sharedPrefs.getString("device_id", "") ?: ""
     val nameFromPrefs = sharedPrefs.getString("user_name", "") ?: ""
+    val langCode = sharedPrefs.getString("app_language", "system") ?: "system"
+    val strings = getStringsForLanguage(langCode)
     
     val finalSenderName = if (senderName.isNotBlank()) senderName else nameFromPrefs
     
@@ -357,9 +404,9 @@ fun sendInterpretedNotification(context: Context, title: String, message: String
     )
     db.collection("quick_messages").add(notification)
         .addOnSuccessListener {
-            Toast.makeText(context, "Mensaje enviado ✨", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strings.drawingSent, Toast.LENGTH_SHORT).show()
         }
         .addOnFailureListener {
-            Toast.makeText(context, "Error al enviar", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strings.drawingError, Toast.LENGTH_SHORT).show()
         }
 }

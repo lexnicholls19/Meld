@@ -31,6 +31,7 @@ fun MoviesListScreen(
     onAddClick: () -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val strings = t()
     var movies by remember { mutableStateOf<List<MovieItem>>(emptyList()) }
 
     DisposableEffect(userId) {
@@ -43,7 +44,7 @@ fun MoviesListScreen(
                         MovieItem(
                             id = doc.id,
                             title = doc.getString("title") ?: "",
-                            addedBy = doc.getString("addedBy") ?: "Alguien"
+                            addedBy = doc.getString("addedBy") ?: strings.someone
                         )
                     }
                 }
@@ -55,7 +56,7 @@ fun MoviesListScreen(
         var text by remember { mutableStateOf("") }
         LoveAlertDialog(
             onDismissRequest = onDismissDialog,
-            title = t().add,
+            title = strings.add,
             onConfirm = {
                 if (text.isNotBlank()) {
                     val item = hashMapOf(
@@ -71,14 +72,14 @@ fun MoviesListScreen(
             LoveTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = t().movieTitle,
-                placeholder = t().moviesDesc
+                label = strings.movieTitle,
+                placeholder = strings.moviesDesc
             )
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = t().movies, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(text = strings.movies, fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -95,30 +96,19 @@ fun MoviesListScreen(
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    text = "Próximamente",
+                    text = strings.comingSoon,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.Gray
                 )
                 Text(
-                    text = "Estamos trabajando en esta sección ✨",
+                    text = strings.workingOnSection,
                     fontSize = 14.sp,
                     color = Color.Gray.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }
-
-        // LazyColumn oculto temporalmente
-        /*
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(movies) { movie ->
-                MovieRow(movie, onDelete = {
-                    db.collection("users").document(userId).collection("movies").document(movie.id).delete()
-                })
-            }
-        }
-        */
     }
 }
 

@@ -44,6 +44,7 @@ import com.google.firebase.firestore.Query
 import com.lexnicholls.lovecounter.ui.components.LoveAlertDialog
 import com.lexnicholls.lovecounter.ui.components.LoveTextField
 import com.lexnicholls.lovecounter.ui.theme.BucketColor
+import com.lexnicholls.lovecounter.util.t
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -59,17 +60,18 @@ fun BucketListScreen(
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
-    val strings = com.lexnicholls.lovecounter.util.t()
+    val strings = t()
     
     var categories by remember { mutableStateOf<List<BucketCategory>>(emptyList()) }
     var expandedCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
     
-    // Total Progress Calculation
-    val totalItems = categories.sumOf { it.items.size }
-    val completedItems = categories.sumOf { cat -> cat.items.count { it.completed } }
+    // Key: CategoryId, Value: Pair(CompletedCount, TotalCount)
+    val categoryStats = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
+    
+    val totalItems = categoryStats.values.sumOf { it.second }
+    val completedItems = categoryStats.values.sumOf { it.first }
     val progress = if (totalItems > 0) completedItems.toFloat() / totalItems else 0f
 
-    // Listen to Categories
     DisposableEffect(userId) {
         val registration = db.collection("users").document(userId).collection("bucket_list")
             .orderBy("timestamp", Query.Direction.ASCENDING)
@@ -79,14 +81,19 @@ fun BucketListScreen(
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    categories = snapshot.documents.map { doc ->
+                    val newCategories = snapshot.documents.map { doc ->
                         BucketCategory(
                             id = doc.id,
                             title = doc.getString("title") ?: "",
                             description = doc.getString("description") ?: "",
-                            addedBy = doc.getString("addedBy") ?: "Alguien"
+                            addedBy = doc.getString("addedBy") ?: strings.someone
                         )
                     }
+                    // Limpiar stats de categorías eliminadas
+                    val currentIds = newCategories.map { it.id }.toSet()
+                    categoryStats.keys.retainAll(currentIds)
+                    
+                    categories = newCategories
                 }
             }
         onDispose { registration.remove() }
@@ -96,12 +103,11 @@ fun BucketListScreen(
         onCompletedViewToggled(false)
     }
 
-    // UNIFIED ADD DIALOG
     if (showAddDialog) {
         var isSubItemMode by remember { mutableStateOf(false) }
         var categoryTitle by remember { mutableStateOf("") }
         var selectedParentId by remember { mutableStateOf("") }
-        var selectedParentTitle by remember { mutableStateOf("Seleccionar Categoría") }
+        var selectedParentTitle by remember { mutableStateOf(strings.selectCategory) }
         var itemTitle by remember { mutableStateOf("") }
         var itemDesc by remember { mutableStateOf("") }
         var itemLocation by remember { mutableStateOf("") }
@@ -116,7 +122,7 @@ fun BucketListScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Añadir nuevo",
+                        text = strings.addNew,
                         color = com.lexnicholls.lovecounter.ui.theme.LovePink,
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
@@ -159,18 +165,16 @@ fun BucketListScreen(
                             .document(selectedParentId).collection("items").add(subItem)
                             .addOnSuccessListener { onDismissDialog() }
                     } else if (selectedParentId.isBlank()) {
-                        Toast.makeText(context, "Por favor selecciona una categoría padre", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strings.selectParentError, Toast.LENGTH_SHORT).show()
                     }
                 }
             }
         ) {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 if (!isSubItemMode) {
-                    Text("Creando nueva categoría contenedora", fontSize = 12.sp, color = Color.Gray)
-                    Spacer(Modifier.height(8.dp))
-                    LoveTextField(value = categoryTitle, onValueChange = { categoryTitle = it }, label = "Nombre de la Categoría")
+                    LoveTextField(value = categoryTitle, onValueChange = { categoryTitle = it }, label = strings.categoryName)
                 } else {
-                    Text("Categoría Padre", fontSize = 12.sp, color = Color.Gray)
+                    Text(strings.parentCategory, fontSize = 12.sp, color = Color.Gray)
                     Spacer(Modifier.height(4.dp))
                     Box {
                         OutlinedCard(
@@ -202,11 +206,11 @@ fun BucketListScreen(
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    LoveTextField(value = itemTitle, onValueChange = { itemTitle = it }, label = "Nombre")
+                    LoveTextField(value = itemTitle, onValueChange = { itemTitle = it }, label = strings.name)
                     Spacer(Modifier.height(12.dp))
-                    LoveTextField(value = itemDesc, onValueChange = { itemDesc = it }, label = "Descripción")
+                    LoveTextField(value = itemDesc, onValueChange = { itemDesc = it }, label = strings.description)
                     Spacer(Modifier.height(12.dp))
-                    LoveTextField(value = itemLocation, onValueChange = { itemLocation = it }, label = "Ubicación", isOptional = true)
+                    LoveTextField(value = itemLocation, onValueChange = { itemLocation = it }, label = strings.location, isOptional = true)
                 }
             }
         }
@@ -220,7 +224,7 @@ fun BucketListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Progreso de aventuras", fontSize = 12.sp, color = Color.Gray)
+            Text(text = strings.adventureProgress, fontSize = 12.sp, color = Color.Gray)
             Text(text = "$completedItems/$totalItems", fontSize = 12.sp, color = Color.Gray)
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -245,6 +249,9 @@ fun BucketListScreen(
                     isExpanded = expandedCategoryId == category.id,
                     onExpandedChange = { expanded ->
                         expandedCategoryId = if (expanded) category.id else null
+                    },
+                    onStatsChange = { completed, total ->
+                        categoryStats[category.id] = Pair(completed, total)
                     }
                 )
             }
@@ -259,8 +266,10 @@ fun CategoryItem(
     db: FirebaseFirestore,
     userName: String,
     isExpanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit
+    onExpandedChange: (Boolean) -> Unit,
+    onStatsChange: (Int, Int) -> Unit
 ) {
+    val strings = t()
     var subItems by remember { mutableStateOf<List<BucketSubItem>>(emptyList()) }
     var showAddTaskDialog by remember { mutableStateOf(false) }
     var showEditCategoryDialog by remember { mutableStateOf(false) }
@@ -269,6 +278,10 @@ fun CategoryItem(
 
     val completedCount = subItems.count { it.completed }
     val totalCount = subItems.size
+
+    LaunchedEffect(completedCount, totalCount) {
+        onStatsChange(completedCount, totalCount)
+    }
 
     DisposableEffect(category.id) {
         val registration = db.collection("users").document(userId)
@@ -285,7 +298,7 @@ fun CategoryItem(
                             description = doc.getString("description") ?: "",
                             completed = doc.getBoolean("completed") ?: false,
                             location = doc.getString("location") ?: "",
-                            addedBy = doc.getString("addedBy") ?: "Alguien"
+                            addedBy = doc.getString("addedBy") ?: strings.someone
                         )
                     }
                     subItems = itemsList
@@ -301,7 +314,7 @@ fun CategoryItem(
         var location by remember { mutableStateOf("") }
         LoveAlertDialog(
             onDismissRequest = { showAddTaskDialog = false },
-            title = "Añadir tarea a ${category.title}",
+            title = strings.addCategory + " " + category.title,
             onConfirm = {
                 if (text.isNotBlank()) {
                     val item = hashMapOf(
@@ -320,11 +333,11 @@ fun CategoryItem(
             }
         ) {
             Column {
-                LoveTextField(value = text, onValueChange = { text = it }, label = "Nombre")
+                LoveTextField(value = text, onValueChange = { text = it }, label = strings.name)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = description, onValueChange = { description = it }, label = "Descripción")
+                LoveTextField(value = description, onValueChange = { description = it }, label = strings.description)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = location, onValueChange = { location = it }, label = "Ubicación", isOptional = true)
+                LoveTextField(value = location, onValueChange = { location = it }, label = strings.location, isOptional = true)
             }
         }
     }
@@ -333,7 +346,7 @@ fun CategoryItem(
         var text by remember { mutableStateOf(category.title) }
         LoveAlertDialog(
             onDismissRequest = { showEditCategoryDialog = false },
-            title = "Editar aventura",
+            title = strings.editAdventure,
             onConfirm = {
                 if (text.isNotBlank()) {
                     db.collection("users").document(userId).collection("bucket_list").document(category.id)
@@ -342,21 +355,21 @@ fun CategoryItem(
                 }
             }
         ) {
-            LoveTextField(value = text, onValueChange = { text = it }, label = "Nombre de la Categoría")
+            LoveTextField(value = text, onValueChange = { text = it }, label = strings.categoryName)
         }
     }
 
     if (showDeleteCategoryDialog) {
         LoveAlertDialog(
             onDismissRequest = { showDeleteCategoryDialog = false },
-            title = "¿Eliminar aventura?",
-            confirmButtonText = "Eliminar",
+            title = strings.deleteAdventure,
+            confirmButtonText = strings.delete,
             onConfirm = {
                 db.collection("users").document(userId).collection("bucket_list").document(category.id).delete()
                 showDeleteCategoryDialog = false
             }
         ) {
-            Text("Se eliminará '${category.title}' y todas sus tareas.")
+            Text(strings.deleteAdventureDesc.format(category.title))
         }
     }
 
@@ -367,7 +380,7 @@ fun CategoryItem(
         
         LoveAlertDialog(
             onDismissRequest = { editingSubItem = null },
-            title = "Editar tarea",
+            title = strings.edit,
             onConfirm = {
                 if (text.isNotBlank()) {
                     db.collection("users").document(userId)
@@ -383,21 +396,20 @@ fun CategoryItem(
             }
         ) {
             Column {
-                LoveTextField(value = text, onValueChange = { text = it }, label = "Nombre")
+                LoveTextField(value = text, onValueChange = { text = it }, label = strings.name)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = description, onValueChange = { description = it }, label = "Descripción")
+                LoveTextField(value = description, onValueChange = { description = it }, label = strings.description)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = location, onValueChange = { location = it }, label = "Ubicación", isOptional = true)
+                LoveTextField(value = location, onValueChange = { location = it }, label = strings.location, isOptional = true)
             }
         }
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Parent Card (Fixed Layer)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .zIndex(1f), // Ensure it stays on top
+                .zIndex(1f),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2E))
         ) {
@@ -441,7 +453,7 @@ fun CategoryItem(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Añadir a esta categoría") },
+                                text = { Text(strings.addToThisCategory) },
                                 leadingIcon = { Icon(Icons.Default.Add, contentDescription = null) },
                                 onClick = { 
                                     menuExpanded = false
@@ -449,7 +461,7 @@ fun CategoryItem(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Editar") },
+                                text = { Text(strings.edit) },
                                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                                 onClick = { 
                                     menuExpanded = false
@@ -457,7 +469,7 @@ fun CategoryItem(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Eliminar") },
+                                text = { Text(strings.delete) },
                                 leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                                 onClick = { 
                                     menuExpanded = false
@@ -470,7 +482,6 @@ fun CategoryItem(
             }
         }
 
-        // Child Items (Unfold from behind)
         AnimatedVisibility(
             visible = isExpanded,
             enter = expandVertically() + fadeIn() + slideInVertically { -it / 2 },
@@ -479,8 +490,8 @@ fun CategoryItem(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp) // Slight indentation to look "inside"
-                    .offset(y = (-8).dp), // Indentation from behind
+                    .padding(horizontal = 8.dp)
+                    .offset(y = (-8).dp),
                 color = Color.Black.copy(alpha = 0.2f),
                 shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
             ) {
@@ -521,8 +532,8 @@ fun SubItemRow(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val strings = t()
     
-    // Custom Swipe Implementation
     var offsetX by remember { mutableStateOf(0f) }
     val animatedOffset by animateFloatAsState(targetValue = offsetX, label = "subitem_swipe")
     val threshold = 250f
@@ -559,7 +570,6 @@ fun SubItemRow(
                 shape = RoundedCornerShape(12.dp)
             )
     ) {
-        // Background Icons
         if (offsetX > 50) {
             Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.CenterStart) {
                 Icon(if (subItem.completed) Icons.Default.Refresh else Icons.Default.Check, null, tint = Color.White)
@@ -614,7 +624,7 @@ fun SubItemRow(
                     }) {
                         Icon(
                             imageVector = Icons.Default.Map,
-                            contentDescription = "Ver en mapa",
+                            contentDescription = strings.viewOnMap,
                             tint = com.lexnicholls.lovecounter.ui.theme.LovePink,
                             modifier = Modifier.size(20.dp)
                         )

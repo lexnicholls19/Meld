@@ -29,7 +29,6 @@ data class User(
 class LoveViewModel @Inject constructor(
     private val db: FirebaseFirestore
 ) : ViewModel() {
-    val startDate: LocalDateTime = LocalDateTime.of(2021, 1, 4, 0, 0)
     
     private val _currentTime = mutableStateOf(LocalDateTime.now())
     val currentTime: State<LocalDateTime> = _currentTime

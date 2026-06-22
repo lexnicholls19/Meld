@@ -7,15 +7,15 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -27,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,6 +43,7 @@ import com.lexnicholls.lovecounter.CurrencyClient
 import com.lexnicholls.lovecounter.ui.components.LoveAlertDialog
 import com.lexnicholls.lovecounter.ui.components.LoveTextField
 import com.lexnicholls.lovecounter.ui.theme.MarketColor
+import com.lexnicholls.lovecounter.util.t
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -61,20 +61,19 @@ fun ShoppingListScreen(
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
+    val strings = t()
     
     val sharedPrefs = remember { context.getSharedPreferences("prefs", Context.MODE_PRIVATE) }
     val localCurrency = remember { sharedPrefs.getString("local_currency", "COP") ?: "COP" }
     
     var items by remember { mutableStateOf<List<ShoppingItem>>(emptyList()) }
-    var tabs by remember { mutableStateOf(listOf("Aseo", "Comida", "Lista de deseos")) }
+    var tabs by remember { mutableStateOf(listOf(strings.hygiene, strings.food, strings.wishlist)) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showTabSettings by remember { mutableStateOf(false) }
 
-    // Multi-selection state
     val selectedIds = remember { mutableStateListOf<String>() }
     val isSelectionMode by remember { derivedStateOf { selectedIds.isNotEmpty() } }
     
-    // Validation: Get the status of the current selection (null if empty, true if all bought, false if all pending)
     val selectionStatus by remember {
         derivedStateOf {
             if (selectedIds.isEmpty()) null
@@ -84,7 +83,6 @@ fun ShoppingListScreen(
         }
     }
 
-    // Currency rates for conversion
     var exchangeRates by remember { mutableStateOf<Map<String, Double>>(emptyMap()) }
     
     LaunchedEffect(localCurrency) {
@@ -96,7 +94,6 @@ fun ShoppingListScreen(
         }
     }
 
-    // SnapshotListener optimized for real-time reactivity
     DisposableEffect(userId) {
         val shoppingCollection = db.collection("users").document(userId).collection("shopping_list")
         val shoppingRegistration = shoppingCollection
@@ -111,9 +108,9 @@ fun ShoppingListScreen(
                         ShoppingItem(
                             id = doc.id,
                             name = doc.getString("name") ?: "",
-                            category = doc.getString("category") ?: "Comida",
+                            category = doc.getString("category") ?: strings.food,
                             bought = doc.getBoolean("bought") ?: false,
-                            addedBy = doc.getString("addedBy") ?: "Alguien",
+                            addedBy = doc.getString("addedBy") ?: strings.someone,
                             details = doc.getString("details") ?: "",
                             price = doc.getString("price") ?: "",
                             currency = doc.getString("currency") ?: localCurrency
@@ -151,11 +148,10 @@ fun ShoppingListScreen(
         var price by remember { mutableStateOf(editingItem!!.price) }
         var selectedItemCurrency by remember { mutableStateOf(editingItem!!.currency) }
         val category = editingItem!!.category
-        val isWishlist = category == "Lista de deseos"
 
         LoveAlertDialog(
             onDismissRequest = { editingItem = null },
-            title = "Editar en $category",
+            title = strings.edit + " " + category,
             onConfirm = {
                 if (text.isNotBlank()) {
                     db.collection("users").document(userId).collection("shopping_list")
@@ -164,27 +160,26 @@ fun ShoppingListScreen(
                             "name" to text,
                             "details" to details,
                             "price" to price,
-                            "currency" to (if (isWishlist) selectedItemCurrency else localCurrency)
+                            "currency" to selectedItemCurrency
                         ))
                     editingItem = null
                 }
             }
         ) {
             Column {
-                LoveTextField(value = text, onValueChange = { text = it }, label = "Nombre del producto")
+                LoveTextField(value = text, onValueChange = { text = it }, label = strings.product)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = details, onValueChange = { details = it }, label = "Datos adicionales", isOptional = true)
+                LoveTextField(value = details, onValueChange = { details = it }, label = strings.additionalData, isOptional = true)
                 Spacer(Modifier.height(8.dp))
                 
                 Row(verticalAlignment = Alignment.Top) {
-                    if (isWishlist) {
-                        CurrencyDropdown(
-                            selectedCurrency = selectedItemCurrency,
-                            onCurrencyChange = { selectedItemCurrency = it },
-                            modifier = Modifier.width(110.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
+                    CurrencyDropdown(
+                        selectedCurrency = selectedItemCurrency,
+                        onCurrencyChange = { selectedItemCurrency = it },
+                        modifier = Modifier.width(110.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    
                     LoveTextField(
                         value = price,
                         onValueChange = { input ->
@@ -192,23 +187,23 @@ fun ShoppingListScreen(
                                 price = input.replace(',', '.')
                             }
                         },
-                        label = "Valor",
+                        label = strings.value,
                         isOptional = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f)
                     )
                 }
 
-                if (isWishlist && price.isNotEmpty() && selectedItemCurrency != localCurrency && exchangeRates.containsKey(selectedItemCurrency)) {
+                if (price.isNotEmpty() && selectedItemCurrency != localCurrency && exchangeRates.containsKey(selectedItemCurrency)) {
                     val rate = exchangeRates[selectedItemCurrency]!!
                     val priceDouble = price.toDoubleOrNull() ?: 0.0
                     val converted = priceDouble / rate
                     val formatter = NumberFormat.getNumberInstance(Locale("es", "CO"))
                     Text(
-                        text = "aprox. ${formatter.format(converted)} $localCurrency",
+                        text = "${strings.approx} ${formatter.format(converted)} $localCurrency",
                         fontSize = 12.sp,
                         color = Color.Gray,
-                        modifier = Modifier.padding(top = 4.dp, start = if (isWishlist) 118.dp else 0.dp)
+                        modifier = Modifier.padding(top = 4.dp, start = 118.dp)
                     )
                 }
             }
@@ -221,11 +216,10 @@ fun ShoppingListScreen(
         var price by remember { mutableStateOf("") }
         var selectedItemCurrency by remember { mutableStateOf(localCurrency) }
         val category = if (selectedTab < tabs.size) tabs[selectedTab] else ""
-        val isWishlist = category == "Lista de deseos"
 
         LoveAlertDialog(
             onDismissRequest = onDismissDialog,
-            title = "Añadir a $category",
+            title = strings.add + " " + category,
             onConfirm = {
                 if (text.isNotBlank()) {
                     val item = hashMapOf(
@@ -233,7 +227,7 @@ fun ShoppingListScreen(
                         "category" to category,
                         "details" to details,
                         "price" to price,
-                        "currency" to (if (isWishlist) selectedItemCurrency else localCurrency),
+                        "currency" to selectedItemCurrency,
                         "bought" to false,
                         "timestamp" to Timestamp.now(),
                         "addedBy" to userName
@@ -247,20 +241,18 @@ fun ShoppingListScreen(
             }
         ) {
             Column {
-                LoveTextField(value = text, onValueChange = { text = it }, label = "Nombre del producto")
+                LoveTextField(value = text, onValueChange = { text = it }, label = strings.product)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = details, onValueChange = { details = it }, label = "Datos adicionales", isOptional = true)
+                LoveTextField(value = details, onValueChange = { details = it }, label = strings.additionalData, isOptional = true)
                 Spacer(Modifier.height(8.dp))
                 
                 Row(verticalAlignment = Alignment.Top) {
-                    if (isWishlist) {
-                        CurrencyDropdown(
-                            selectedCurrency = selectedItemCurrency,
-                            onCurrencyChange = { selectedItemCurrency = it },
-                            modifier = Modifier.width(110.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
+                    CurrencyDropdown(
+                        selectedCurrency = selectedItemCurrency,
+                        onCurrencyChange = { selectedItemCurrency = it },
+                        modifier = Modifier.width(110.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
                     LoveTextField(
                         value = price,
                         onValueChange = { input ->
@@ -268,23 +260,23 @@ fun ShoppingListScreen(
                                 price = input.replace(',', '.')
                             }
                         },
-                        label = "Valor",
+                        label = strings.value,
                         isOptional = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.weight(1f)
                     )
                 }
 
-                if (isWishlist && price.isNotEmpty() && selectedItemCurrency != localCurrency && exchangeRates.containsKey(selectedItemCurrency)) {
+                if (price.isNotEmpty() && selectedItemCurrency != localCurrency && exchangeRates.containsKey(selectedItemCurrency)) {
                     val rate = exchangeRates[selectedItemCurrency]!!
                     val priceDouble = price.toDoubleOrNull() ?: 0.0
                     val converted = priceDouble / rate
                     val formatter = NumberFormat.getNumberInstance(Locale("es", "CO"))
                     Text(
-                        text = "aprox. ${formatter.format(converted)} $localCurrency",
+                        text = "${strings.approx} ${formatter.format(converted)} $localCurrency",
                         fontSize = 12.sp,
                         color = Color.Gray,
-                        modifier = Modifier.padding(top = 4.dp, start = if (isWishlist) 118.dp else 0.dp)
+                        modifier = Modifier.padding(top = 4.dp, start = 118.dp)
                     )
                 }
             }
@@ -300,15 +292,14 @@ fun ShoppingListScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { selectedIds.clear() }) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancelar")
+                        Icon(Icons.Default.Close, contentDescription = strings.cancel)
                     }
-                    Text(text = "${selectedIds.size} seleccionados", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "${selectedIds.size} ${strings.completed.lowercase()}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Row {
-                    // NEW: Bulk Toggle Action (Complete/Restore)
                     IconButton(onClick = {
                         val batch = db.batch()
-                        val newStatus = selectionStatus != true // Toggle current status
+                        val newStatus = selectionStatus != true
                         selectedIds.forEach { id ->
                             val docRef = db.collection("users").document(userId).collection("shopping_list").document(id)
                             batch.update(docRef, "bought", newStatus)
@@ -318,7 +309,7 @@ fun ShoppingListScreen(
                     }) {
                         Icon(
                             imageVector = if (selectionStatus == true) Icons.Default.Refresh else Icons.Default.Check,
-                            contentDescription = if (selectionStatus == true) "Restaurar" else "Completar",
+                            contentDescription = if (selectionStatus == true) strings.restore else strings.confirm,
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -332,7 +323,7 @@ fun ShoppingListScreen(
                         batch.commit()
                         selectedIds.clear()
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Borrar", tint = Color.Red)
+                        Icon(Icons.Default.Delete, contentDescription = strings.delete, tint = Color.Red)
                     }
                 }
             }
@@ -342,7 +333,7 @@ fun ShoppingListScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Lista de Mercado", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(text = strings.marketList, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = {
                         val batch = db.batch()
@@ -353,10 +344,10 @@ fun ShoppingListScreen(
                         }
                         batch.commit()
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Borrar Comprados", tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Delete, contentDescription = strings.deleteBought, tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                     }
                     IconButton(onClick = { showTabSettings = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Configurar Pestañas", tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Settings, contentDescription = strings.manageCategories, tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                     }
                 }
             }
@@ -387,7 +378,6 @@ fun ShoppingListScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Sort items: bought items at the end
         val currentList = remember(items, selectedTab, tabs) {
             val currentCategory = if (selectedTab < tabs.size) tabs[selectedTab] else ""
             items
@@ -416,14 +406,13 @@ fun ShoppingListScreen(
                     },
                     onClick = {
                         if (isSelectionMode) {
-                            // Validation: Only allow selecting items with the SAME status
                             if (isSelected) {
                                 selectedIds.remove(item.id)
                             } else {
                                 if (selectionStatus == item.bought) {
                                     selectedIds.add(item.id)
                                 } else {
-                                    Toast.makeText(context, "No puedes mezclar items pendientes y comprados", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, strings.cannotMixItems, Toast.LENGTH_SHORT).show()
                                 }
                             }
                         } else {
@@ -448,8 +437,8 @@ fun ShoppingListScreen(
                 showTabSettings = false
                 editingIndex = null 
             },
-            title = "Configurar Pestañas",
-            confirmButtonText = "Guardar",
+            title = strings.manageCategories,
+            confirmButtonText = strings.save,
             onConfirm = {
                 db.collection("users").document(userId).collection("settings")
                     .document("shopping_categories")
@@ -459,46 +448,44 @@ fun ShoppingListScreen(
             }
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Gestionar categorías de la lista", fontSize = 14.sp, color = Color.Gray)
+                Text(strings.manageCategories, fontSize = 14.sp, color = Color.Gray)
                 Spacer(Modifier.height(12.dp))
                 
-                // List existing categories with manual reordering
                 Column(modifier = Modifier.fillMaxWidth()) {
                     tabs.forEachIndexed { index, tab ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Botones de flecha para reordenar a la IZQUIERDA
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(
                                     onClick = {
                                         if (index > 0) {
                                             val newList = tabs.toMutableList()
-                                            val item = newList.removeAt(index)
-                                            newList.add(index - 1, item)
+                                            val itm = newList.removeAt(index)
+                                            newList.add(index - 1, itm)
                                             tabs = newList
                                         }
                                     },
                                     enabled = index > 0,
                                     modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(Icons.Default.ArrowUpward, contentDescription = "Subir", tint = if(index > 0) Color.Gray.copy(alpha = 0.6f) else Color.Transparent, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = if(index > 0) Color.Gray.copy(alpha = 0.6f) else Color.Transparent, modifier = Modifier.size(18.dp))
                                 }
 
                                 IconButton(
                                     onClick = {
                                         if (index < tabs.size - 1) {
                                             val newList = tabs.toMutableList()
-                                            val item = newList.removeAt(index)
-                                            newList.add(index + 1, item)
+                                            val itm = newList.removeAt(index)
+                                            newList.add(index + 1, itm)
                                             tabs = newList
                                         }
                                     },
                                     enabled = index < tabs.size - 1,
                                     modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(Icons.Default.ArrowDownward, contentDescription = "Bajar", tint = if(index < tabs.size - 1) Color.Gray.copy(alpha = 0.6f) else Color.Transparent, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.ArrowDownward, contentDescription = null, tint = if(index < tabs.size - 1) Color.Gray.copy(alpha = 0.6f) else Color.Transparent, modifier = Modifier.size(18.dp))
                                 }
                             }
                             
@@ -519,7 +506,6 @@ fun ShoppingListScreen(
                                                 newList[index] = editingText
                                                 tabs = newList
                                                 
-                                                // Actualizar items que usaban el nombre viejo
                                                 val batch = db.batch()
                                                 items.filter { it.category == oldName }.forEach { item ->
                                                     val docRef = db.collection("users").document(userId).collection("shopping_list").document(item.id)
@@ -530,7 +516,7 @@ fun ShoppingListScreen(
                                                 editingIndex = null
                                             }
                                         }) {
-                                            Icon(Icons.Default.Check, contentDescription = "Guardar", tint = MaterialTheme.colorScheme.primary)
+                                            Icon(Icons.Default.Check, contentDescription = strings.save, tint = MaterialTheme.colorScheme.primary)
                                         }
                                     }
                                 )
@@ -541,7 +527,7 @@ fun ShoppingListScreen(
                                     editingIndex = index
                                     editingText = tab
                                 }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.Edit, contentDescription = strings.edit, tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                                 }
                                 if (tabs.size > 1) {
                                     IconButton(onClick = {
@@ -550,7 +536,7 @@ fun ShoppingListScreen(
                                         tabs = newList
                                         if (selectedTab >= newList.size) selectedTab = 0
                                     }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Default.Delete, contentDescription = strings.delete, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
@@ -560,12 +546,11 @@ fun ShoppingListScreen(
                 
                 com.lexnicholls.lovecounter.ui.components.HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                 
-                // Add new category
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = newCategoryName,
                         onValueChange = { newCategoryName = it },
-                        label = { Text("Nueva categoría") },
+                        label = { Text(strings.newCategory) },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
@@ -577,7 +562,7 @@ fun ShoppingListScreen(
                             newCategoryName = ""
                         }
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "Añadir", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Add, contentDescription = strings.add, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -604,7 +589,7 @@ fun CurrencyDropdown(
             value = selectedCurrency,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Moneda") },
+            label = { Text(t().currency) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
             shape = RoundedCornerShape(12.dp),
@@ -645,16 +630,13 @@ fun ShoppingRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val isWishlist = item.category == "Lista de deseos"
+    val strings = t()
     val scope = rememberCoroutineScope()
     
-    // CUSTOM GESTURE REPLACEMENT FOR SWIPETODISMISSBOX
-    // We use Draggable + manual state to ENSURE it never locks up
     var offsetX by remember { mutableStateOf(0f) }
     val animatedOffset by animateFloatAsState(targetValue = offsetX, label = "offset")
     val threshold = 250f
 
-    // Reset visually when database changes
     LaunchedEffect(item.bought) {
         offsetX = 0f
     }
@@ -667,14 +649,13 @@ fun ShoppingRow(
                 orientation = Orientation.Horizontal,
                 state = rememberDraggableState { delta ->
                     val newOffset = offsetX + delta
-                    // Resistance and constraints
                     offsetX = newOffset.coerceIn(-500f, 500f)
                 },
                 onDragStopped = {
                     if (offsetX > threshold) {
                         onToggle()
                     } else if (offsetX < -threshold) {
-                        if (isWishlist) onDelete() else onToggle()
+                        onDelete()
                     }
                     scope.launch {
                         offsetX = 0f
@@ -684,24 +665,22 @@ fun ShoppingRow(
             .background(
                 color = when {
                     offsetX > 50 -> if (item.bought) Color(0xFFFFA500) else Color(0xFF4CAF50)
-                    offsetX < -50 -> if (isWishlist) Color(0xFFF44336) else (if (item.bought) Color(0xFFFFA500) else Color(0xFF4CAF50))
+                    offsetX < -50 -> Color(0xFFF44336)
                     else -> Color.Transparent
                 },
                 shape = RoundedCornerShape(12.dp)
             )
     ) {
-        // Background Icons
         if (offsetX > 50) {
             Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.CenterStart) {
                 Icon(if (item.bought) Icons.Default.Refresh else Icons.Default.Check, null, tint = Color.White)
             }
         } else if (offsetX < -50) {
             Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.CenterEnd) {
-                Icon(if (isWishlist) Icons.Default.Delete else (if (item.bought) Icons.Default.Refresh else Icons.Default.Check), null, tint = Color.White)
+                Icon(Icons.Default.Delete, null, tint = Color.White)
             }
         }
 
-        // Main Item Card
         Card(
             modifier = Modifier
                 .offset { IntOffset(animatedOffset.roundToInt(), 0) }
@@ -745,7 +724,7 @@ fun ShoppingRow(
                             fontWeight = FontWeight.Normal,
                             textDecoration = if (item.bought) TextDecoration.LineThrough else null
                         )
-                        Text(text = "Añadido por: ${item.addedBy}", fontSize = 11.sp, color = Color.Gray)
+                        Text(text = "${strings.addedBy}: ${item.addedBy}", fontSize = 11.sp, color = Color.Gray)
                         
                         if (item.details.isNotBlank()) {
                             Text(
@@ -773,7 +752,7 @@ fun ShoppingRow(
                                 val rate = exchangeRates[item.currency]!!
                                 val converted = priceDouble / rate
                                 Text(
-                                    text = "aprox. ${formatter.format(converted)} $localCurrency",
+                                    text = "${strings.approx} ${formatter.format(converted)} $localCurrency",
                                     fontSize = 10.sp,
                                     color = Color.Gray,
                                     textDecoration = if (item.bought) TextDecoration.LineThrough else null

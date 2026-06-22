@@ -81,14 +81,14 @@ fun LoginScreen(
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        Text(text = "Bienvenido de nuevo", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(text = strings.welcomeBack, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         
         Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Correo electrónico") },
+            label = { Text(strings.email) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
@@ -98,7 +98,7 @@ fun LoginScreen(
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Contraseña") },
+            label = { Text(strings.password) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
@@ -117,7 +117,7 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Iniciar Sesión")
+            Text(strings.login)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -126,14 +126,14 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray.copy(alpha = 0.5f))
+            com.lexnicholls.lovecounter.ui.components.HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray.copy(alpha = 0.5f))
             Text(
                 text = strings.otherWaysToSignIn,
                 modifier = Modifier.padding(horizontal = 16.dp),
                 fontSize = 12.sp,
                 color = Color.Gray
             )
-            HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray.copy(alpha = 0.5f))
+            com.lexnicholls.lovecounter.ui.components.HorizontalDivider(modifier = Modifier.weight(1f), color = Color.LightGray.copy(alpha = 0.5f))
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -161,7 +161,7 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(32.dp))
 
         TextButton(onClick = onNavigateToRegister) {
-            Text("¿No tienes cuenta? Regístrate")
+            Text(strings.dontHaveAccount)
         }
     }
 }
@@ -172,6 +172,7 @@ fun RegisterScreen(
     onRegisterSuccess: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = t()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -184,14 +185,14 @@ fun RegisterScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(text = "Crear Cuenta", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text(text = strings.createAccount, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         
         Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Correo electrónico") },
+            label = { Text(strings.email) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
@@ -201,7 +202,7 @@ fun RegisterScreen(
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Contraseña") },
+            label = { Text(strings.password) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
@@ -212,7 +213,7 @@ fun RegisterScreen(
         OutlinedTextField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
-            label = { Text("Confirmar Contraseña") },
+            label = { Text(strings.confirmPassword) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
@@ -226,27 +227,27 @@ fun RegisterScreen(
                     if (password == confirmPassword) {
                         auth.createUserWithEmailAndPassword(email, password)
                             .addOnSuccessListener { 
-                                Toast.makeText(context, "Cuenta creada con éxito", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strings.accountCreated, Toast.LENGTH_SHORT).show()
                                 onRegisterSuccess() 
                             }
                             .addOnFailureListener { Toast.makeText(context, "Error: ${it.message}", Toast.LENGTH_SHORT).show() }
                     } else {
-                        Toast.makeText(context, "Las contraseñas no coinciden", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strings.passwordsDontMatch, Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Toast.makeText(context, "Correo inválido o contraseña muy corta", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, strings.invalidEmailOrPassword, Toast.LENGTH_SHORT).show()
                 }
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Registrarme")
+            Text(strings.register)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         TextButton(onClick = onNavigateToLogin) {
-            Text("¿Ya tienes cuenta? Inicia sesión")
+            Text(strings.alreadyHaveAccount)
         }
     }
 }

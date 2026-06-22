@@ -9,19 +9,23 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+val LocalIsDark = staticCompositionLocalOf { true }
+
 private val DarkColorScheme = darkColorScheme(
     primary = LovePink,
     secondary = SecondaryColor,
     tertiary = TertiaryColor,
     background = Color.Transparent,
-    surface = Color(0xFF1E293B), // Un azul grisáceo que resalta sobre el fondo oscuro
+    surface = Color(0xFF1E293B), 
     surfaceVariant = Color(0xFF334155)
 )
 
@@ -30,8 +34,8 @@ private val LightColorScheme = lightColorScheme(
     secondary = SecondaryColor,
     tertiary = TertiaryColor,
     background = Color.Transparent,
-    surface = Color(0xE6FFFFFF), // Blanco semi-transparente
-    surfaceVariant = Color.White   // Forzamos que las variantes también sean blancas
+    surface = Color(0xFFF8FAFC), 
+    surfaceVariant = Color.White
 )
 
 @Composable
@@ -54,13 +58,20 @@ fun LoveCounterTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+            // Hacer la ventana edge-to-edge
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            // Barra de estado transparente para ver el gradiente de la app
+            window.statusBarColor = Color.Transparent.toArgb()
+            
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            insetsController.isAppearanceLightStatusBars = !darkTheme
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        content = content
-    )
+    CompositionLocalProvider(LocalIsDark provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            content = content
+        )
+    }
 }

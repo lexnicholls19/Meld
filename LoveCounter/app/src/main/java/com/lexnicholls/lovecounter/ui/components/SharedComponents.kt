@@ -17,10 +17,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lexnicholls.lovecounter.util.t
 import com.lexnicholls.lovecounter.ui.theme.LovePink
+import com.lexnicholls.lovecounter.ui.theme.LocalIsDark
 
 @Composable
 fun AppBackground(content: @Composable () -> Unit) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDark.current
     
     // Definimos los colores del gradiente para ambos temas
     val gradientColors = if (isDark) {

@@ -54,16 +54,15 @@ fun RemindersScreen(
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
+    val strings = t()
     
     var pendingReminders by remember { mutableStateOf<List<ReminderItem>>(emptyList()) }
     var completedReminders by remember { mutableStateOf<List<ReminderItem>>(emptyList()) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
-    // Multi-selection state
     val selectedIds = remember { mutableStateListOf<String>() }
     val isSelectionMode by remember { derivedStateOf { selectedIds.isNotEmpty() } }
 
-    // Escuchar TODOS los recordatorios del usuario
     DisposableEffect(userId) {
         val collection = db.collection("users").document(userId).collection("reminders")
         val registration = collection
@@ -82,19 +81,16 @@ fun RemindersScreen(
                             location = doc.getString("location") ?: "",
                             dueDate = doc.getTimestamp("dueDate"),
                             completed = doc.getBoolean("completed") ?: false,
-                            addedBy = doc.getString("addedBy") ?: "Alguien",
+                            addedBy = doc.getString("addedBy") ?: strings.someone,
                             timestamp = doc.getTimestamp("timestamp") ?: Timestamp.now()
                         )
                     }
                     
-                    // Función de ordenado: 
-                    // 1. Los que tienen fecha (dueDate) van primero, ordenados de más cercana a lejana.
-                    // 2. Los que NO tienen fecha van después, ordenados por timestamp de creación (el más nuevo arriba).
                     fun sortReminders(list: List<ReminderItem>): List<ReminderItem> {
                         return list.sortedWith(
-                            compareBy<ReminderItem> { it.dueDate == null } // False (con fecha) va antes que True (sin fecha)
-                                .thenBy { it.dueDate?.seconds ?: Long.MAX_VALUE } // De más cercano a más lejano (o final de la lista)
-                                .thenByDescending { it.timestamp.seconds } // Entre los sin fecha, el más nuevo arriba
+                            compareBy<ReminderItem> { it.dueDate == null }
+                                .thenBy { it.dueDate?.seconds ?: Long.MAX_VALUE }
+                                .thenByDescending { it.timestamp.seconds }
                         )
                     }
 
@@ -105,13 +101,11 @@ fun RemindersScreen(
         onDispose { registration.remove() }
     }
 
-    // Informar al padre
     LaunchedEffect(selectedTab) {
         onCompletedViewToggled(selectedTab == 1)
-        selectedIds.clear() // Limpiar selección al cambiar de pestaña
+        selectedIds.clear()
     }
 
-    // Diálogo para Editar
     var editingItem by remember { mutableStateOf<ReminderItem?>(null) }
     if (editingItem != null && !isSelectionMode) {
         var text by remember { mutableStateOf(editingItem!!.text) }
@@ -130,13 +124,13 @@ fun RemindersScreen(
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text(t().confirm) }
+                    TextButton(onClick = { showDatePicker = false }) { Text(strings.confirm) }
                 },
                 dismissButton = {
                     TextButton(onClick = { 
                         dateState.selectedDateMillis = null
                         showDatePicker = false 
-                    }) { Text(t().cancel) }
+                    }) { Text(strings.cancel) }
                 }
             ) {
                 DatePicker(state = dateState)
@@ -145,7 +139,7 @@ fun RemindersScreen(
 
         LoveAlertDialog(
             onDismissRequest = { editingItem = null },
-            title = t().edit,
+            title = strings.edit,
             onConfirm = {
                 if (text.isNotBlank()) {
                     val updates = mutableMapOf<String, Any>(
@@ -168,16 +162,16 @@ fun RemindersScreen(
             }
         ) {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                LoveTextField(value = text, onValueChange = { text = it }, label = t().reminders)
+                LoveTextField(value = text, onValueChange = { text = it }, label = strings.reminders)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = description, onValueChange = { description = it }, label = "Descripción", isOptional = true)
+                LoveTextField(value = description, onValueChange = { description = it }, label = strings.description, isOptional = true)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = location, onValueChange = { location = it }, label = "Ubicación", isOptional = true)
+                LoveTextField(value = location, onValueChange = { location = it }, label = strings.location, isOptional = true)
                 Spacer(Modifier.height(16.dp))
                 
                 val dateDisplay = dateState.selectedDateMillis?.let {
                     Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                } ?: "No seleccionada"
+                } ?: strings.notSelected
                 
                 OutlinedCard(
                     onClick = { showDatePicker = true },
@@ -191,7 +185,7 @@ fun RemindersScreen(
                         Icon(Icons.Default.Event, null, tint = Color.Gray)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Fecha límite (Opcional)", fontSize = 12.sp, color = Color.Gray)
+                            Text(strings.dueDateOptional, fontSize = 12.sp, color = Color.Gray)
                             Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         }
                     }
@@ -211,13 +205,13 @@ fun RemindersScreen(
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text(t().confirm) }
+                    TextButton(onClick = { showDatePicker = false }) { Text(strings.confirm) }
                 },
                 dismissButton = {
                     TextButton(onClick = { 
                         dateState.selectedDateMillis = null
                         showDatePicker = false 
-                    }) { Text(t().cancel) }
+                    }) { Text(strings.cancel) }
                 }
             ) {
                 DatePicker(state = dateState)
@@ -226,7 +220,7 @@ fun RemindersScreen(
 
         LoveAlertDialog(
             onDismissRequest = onDismissDialog,
-            title = t().add,
+            title = strings.add,
             onConfirm = {
                 if (text.isNotBlank()) {
                     val item = mutableMapOf<String, Any>(
@@ -250,16 +244,16 @@ fun RemindersScreen(
             }
         ) {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                LoveTextField(value = text, onValueChange = { text = it }, label = t().reminders)
+                LoveTextField(value = text, onValueChange = { text = it }, label = strings.reminders)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = description, onValueChange = { description = it }, label = "Descripción", isOptional = true)
+                LoveTextField(value = description, onValueChange = { description = it }, label = strings.description, isOptional = true)
                 Spacer(Modifier.height(8.dp))
-                LoveTextField(value = location, onValueChange = { location = it }, label = "Ubicación", isOptional = true)
+                LoveTextField(value = location, onValueChange = { location = it }, label = strings.location, isOptional = true)
                 Spacer(Modifier.height(16.dp))
 
                 val dateDisplay = dateState.selectedDateMillis?.let {
                     Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                } ?: "No seleccionada"
+                } ?: strings.notSelected
 
                 OutlinedCard(
                     onClick = { showDatePicker = true },
@@ -273,7 +267,7 @@ fun RemindersScreen(
                         Icon(Icons.Default.Event, null, tint = Color.Gray)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Fecha límite (Opcional)", fontSize = 12.sp, color = Color.Gray)
+                            Text(strings.dueDateOptional, fontSize = 12.sp, color = Color.Gray)
                             Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         }
                     }
@@ -283,7 +277,6 @@ fun RemindersScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Barra Superior Dinámica (Título o Selección)
         if (isSelectionMode) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -292,9 +285,9 @@ fun RemindersScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { selectedIds.clear() }) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancelar")
+                        Icon(Icons.Default.Close, contentDescription = strings.cancel)
                     }
-                    Text(text = "${selectedIds.size} seleccionados", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "${selectedIds.size} ${strings.completed.lowercase()}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Row {
                     IconButton(onClick = {
@@ -308,7 +301,7 @@ fun RemindersScreen(
                     }) {
                         Icon(
                             imageVector = if (selectedTab == 0) Icons.Default.Check else Icons.Default.Refresh,
-                            contentDescription = "Acción Masiva",
+                            contentDescription = strings.massAction,
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -321,15 +314,14 @@ fun RemindersScreen(
                         batch.commit()
                         selectedIds.clear()
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Borrar Seleccionados", tint = Color.Red)
+                        Icon(Icons.Default.Delete, contentDescription = strings.deleteSelected, tint = Color.Red)
                     }
                 }
             }
         } else {
-            Text(text = t().reminders, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            Text(text = strings.reminders, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
         }
 
-        // Pestañas (Tabs)
         TabRow(
             selectedTabIndex = selectedTab,
             containerColor = Color.Transparent,
@@ -339,13 +331,13 @@ fun RemindersScreen(
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Vigentes") }
+                text = { Text(strings.currentReminders) }
             )
             if (completedReminders.isNotEmpty()) {
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text(t().completed) }
+                    text = { Text(strings.completed) }
                 )
             } else if (selectedTab == 1) {
                 selectedTab = 0
@@ -401,6 +393,7 @@ fun ReminderRow(
     onLongClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val strings = t()
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (it == SwipeToDismissBoxValue.EndToStart) {
@@ -471,7 +464,6 @@ fun ReminderRow(
                 modifier = Modifier.height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Indicador lateral (Tooltip color)
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -494,18 +486,26 @@ fun ReminderRow(
                         }
                         
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                            Text(text = "${t().addedBy}: ${item.addedBy}", fontSize = 11.sp, color = Color.Gray)
-                            
-                            if (item.dueDate != null) {
-                                Spacer(Modifier.width(8.dp))
-                                Icon(Icons.Default.Event, null, modifier = Modifier.size(12.dp), tint = Color.Gray)
-                                Spacer(Modifier.width(2.dp))
-                                // Mostramos la fecha usando UTC para evitar desfases locales al leer
-                                val date = Instant.ofEpochMilli(item.dueDate.toDate().time)
-                                    .atZone(ZoneOffset.UTC)
-                                    .toLocalDate()
-                                Text(text = date.format(DateTimeFormatter.ofPattern("dd/MM")), fontSize = 11.sp, color = Color.Gray)
-                            }
+                            Text(text = "${strings.addedBy}: ${item.addedBy}", fontSize = 11.sp, color = Color.Gray)
+                        }
+                    }
+
+                    if (item.dueDate != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Event, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+                            Spacer(Modifier.width(4.dp))
+                            val date = Instant.ofEpochMilli(item.dueDate.toDate().time)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                            Text(
+                                text = date.format(DateTimeFormatter.ofPattern("dd/MM")),
+                                fontSize = 14.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
 
@@ -516,7 +516,12 @@ fun ReminderRow(
                             intent.setPackage("com.google.android.apps.maps")
                             context.startActivity(intent)
                         }) {
-                            Icon(Icons.Default.LocationOn, contentDescription = "Ver en mapa", tint = Color.Red)
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = strings.viewOnMap,
+                                tint = com.lexnicholls.lovecounter.ui.theme.LovePink,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
 

@@ -210,7 +210,7 @@ fun DailyConnectionScreen(
             )
         ) {
             Text(
-                text = if (isAlreadyAnswered) "Ver otra pregunta" else strings.answerQuestion,
+                text = if (isAlreadyAnswered) strings.seeAnotherQuestion else strings.answerQuestion,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White

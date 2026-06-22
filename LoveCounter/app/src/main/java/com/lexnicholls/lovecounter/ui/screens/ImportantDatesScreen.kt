@@ -49,10 +49,10 @@ fun ImportantDatesScreen(
 ) {
     val context = LocalContext.current
     val db = FirebaseFirestore.getInstance()
+    val strings = t()
     
     var dates by remember { mutableStateOf<List<DateItem>>(emptyList()) }
 
-    // Multi-selection state
     val selectedIds = remember { mutableStateListOf<String>() }
     val isSelectionMode by remember { derivedStateOf { selectedIds.isNotEmpty() } }
 
@@ -71,7 +71,7 @@ fun ImportantDatesScreen(
                             id = doc.id,
                             title = doc.getString("title") ?: "",
                             date = doc.getTimestamp("date") ?: Timestamp.now(),
-                            addedBy = doc.getString("addedBy") ?: "Alguien"
+                            addedBy = doc.getString("addedBy") ?: strings.someone
                         )
                     }
                 }
@@ -79,7 +79,6 @@ fun ImportantDatesScreen(
         onDispose { registration.remove() }
     }
 
-    // Edit Dialog
     var editingItem by remember { mutableStateOf<DateItem?>(null) }
     if (editingItem != null && !isSelectionMode) {
         var title by remember { mutableStateOf(editingItem!!.title) }
@@ -92,10 +91,10 @@ fun ImportantDatesScreen(
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text(t().confirm) }
+                    TextButton(onClick = { showDatePicker = false }) { Text(strings.confirm) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text(t().cancel) }
+                    TextButton(onClick = { showDatePicker = false }) { Text(strings.cancel) }
                 }
             ) {
                 DatePicker(state = dateState)
@@ -104,7 +103,7 @@ fun ImportantDatesScreen(
 
         LoveAlertDialog(
             onDismissRequest = { editingItem = null },
-            title = t().edit,
+            title = strings.edit,
             onConfirm = {
                 if (title.isNotBlank() && dateState.selectedDateMillis != null) {
                     db.collection("users").document(userId).collection("important_dates")
@@ -118,12 +117,12 @@ fun ImportantDatesScreen(
             }
         ) {
             Column {
-                LoveTextField(value = title, onValueChange = { title = it }, label = t().movieTitle)
+                LoveTextField(value = title, onValueChange = { title = it }, label = strings.movieTitle)
                 Spacer(Modifier.height(16.dp))
                 
                 val dateDisplay = dateState.selectedDateMillis?.let {
                     Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                } ?: t().selectDate
+                } ?: strings.selectDate
 
                 OutlinedCard(
                     onClick = { showDatePicker = true },
@@ -137,7 +136,7 @@ fun ImportantDatesScreen(
                         Icon(Icons.Default.Event, null, tint = DatesColor)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(t().selectDate, fontSize = 12.sp, color = Color.Gray)
+                            Text(strings.selectDate, fontSize = 12.sp, color = Color.Gray)
                             Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         }
                     }
@@ -155,10 +154,10 @@ fun ImportantDatesScreen(
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text(t().confirm) }
+                    TextButton(onClick = { showDatePicker = false }) { Text(strings.confirm) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text(t().cancel) }
+                    TextButton(onClick = { showDatePicker = false }) { Text(strings.cancel) }
                 }
             ) {
                 DatePicker(state = dateState)
@@ -167,7 +166,7 @@ fun ImportantDatesScreen(
 
         LoveAlertDialog(
             onDismissRequest = onDismissDialog,
-            title = t().add,
+            title = strings.add,
             onConfirm = {
                 if (title.isNotBlank() && dateState.selectedDateMillis != null) {
                     val item = hashMapOf(
@@ -185,12 +184,12 @@ fun ImportantDatesScreen(
             }
         ) {
             Column {
-                LoveTextField(value = title, onValueChange = { title = it }, label = t().movieTitle)
+                LoveTextField(value = title, onValueChange = { title = it }, label = strings.movieTitle)
                 Spacer(Modifier.height(16.dp))
 
                 val dateDisplay = dateState.selectedDateMillis?.let {
                     Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                } ?: t().selectDate
+                } ?: strings.selectDate
 
                 OutlinedCard(
                     onClick = { showDatePicker = true },
@@ -204,7 +203,7 @@ fun ImportantDatesScreen(
                         Icon(Icons.Default.Event, null, tint = DatesColor)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(t().selectDate, fontSize = 12.sp, color = Color.Gray)
+                            Text(strings.selectDate, fontSize = 12.sp, color = Color.Gray)
                             Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         }
                     }
@@ -222,9 +221,9 @@ fun ImportantDatesScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { selectedIds.clear() }) {
-                        Icon(Icons.Default.Close, contentDescription = "Cancelar")
+                        Icon(Icons.Default.Close, contentDescription = strings.cancel)
                     }
-                    Text(text = "${selectedIds.size} seleccionados", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "${selectedIds.size} ${strings.completed.lowercase()}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 }
                 Row {
                     IconButton(onClick = {
@@ -236,15 +235,14 @@ fun ImportantDatesScreen(
                         batch.commit()
                         selectedIds.clear()
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Borrar", tint = Color.Red)
+                        Icon(Icons.Default.Delete, contentDescription = strings.delete, tint = Color.Red)
                     }
                 }
             }
         } else {
-            Text(text = t().dates, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            Text(text = strings.dates, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
         }
 
-        // Sort dates by remaining days
         val sortedDates = remember(dates) {
             dates.sortedBy { calculateDaysRemaining(it.date) }
         }
@@ -278,21 +276,6 @@ fun ImportantDatesScreen(
     }
 }
 
-fun calculateDaysRemaining(dateTimestamp: Timestamp): Long {
-    val today = LocalDate.now()
-    val originalDate = Instant.ofEpochMilli(dateTimestamp.toDate().time)
-        .atZone(ZoneOffset.UTC)
-        .toLocalDate()
-
-    // Logic to find the NEXT occurrence of the date (anniversary/birthday)
-    var nextOccurrence = originalDate.withYear(today.year)
-    if (nextOccurrence.isBefore(today)) {
-        nextOccurrence = nextOccurrence.plusYears(1)
-    }
-
-    return ChronoUnit.DAYS.between(today, nextOccurrence)
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DateRow(
@@ -302,6 +285,7 @@ fun DateRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val strings = t()
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (it == SwipeToDismissBoxValue.EndToStart) {
@@ -346,7 +330,6 @@ fun DateRow(
                 modifier = Modifier.height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Indicador lateral (Tooltip color)
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -379,7 +362,6 @@ fun DateRow(
                         }
                     }
 
-                    // Countdown of days remaining
                     val daysRemaining = calculateDaysRemaining(item.date)
                     
                     Surface(
@@ -387,7 +369,7 @@ fun DateRow(
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            text = "faltan $daysRemaining d",
+                            text = strings.daysLeftShort.format(daysRemaining),
                             color = DatesColor,
                             fontSize = 12.sp,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -403,6 +385,20 @@ fun DateRow(
             }
         }
     }
+}
+
+fun calculateDaysRemaining(dateTimestamp: Timestamp): Long {
+    val today = LocalDate.now()
+    val originalDate = Instant.ofEpochMilli(dateTimestamp.toDate().time)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+
+    var nextOccurrence = originalDate.withYear(today.year)
+    if (nextOccurrence.isBefore(today)) {
+        nextOccurrence = nextOccurrence.plusYears(1)
+    }
+
+    return ChronoUnit.DAYS.between(today, nextOccurrence)
 }
 
 data class DateItem(

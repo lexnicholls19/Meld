@@ -1,10 +1,16 @@
 package com.lexnicholls.lovecounter.ui.screens
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -16,14 +22,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.lexnicholls.lovecounter.ui.navigation.ThemeMode
 import com.lexnicholls.lovecounter.ui.theme.LovePink
@@ -41,6 +53,7 @@ fun SettingsScreen(
     currentMainTitle: String,
     currentLanguage: String,
     currentVisibleCategories: Set<String>,
+    currentRelationshipDate: Long?,
     onThemeChange: (ThemeMode) -> Unit,
     onNameChange: (String) -> Unit,
     onMainTitleChange: (String) -> Unit,
@@ -49,11 +62,13 @@ fun SettingsScreen(
     onWidgetConfigsChange: (Set<String>) -> Unit,
     onAutoRotateChange: (Boolean) -> Unit,
     onCurrencyChange: (String) -> Unit,
+    onRelationshipDateChange: (Long?) -> Unit,
     onLogout: () -> Unit,
     onSyncQuestions: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val strings = t()
+    val sharedPrefs = remember { context.getSharedPreferences("prefs", android.content.Context.MODE_PRIVATE) }
     val loveViewModel: com.lexnicholls.lovecounter.viewmodel.LoveViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     
     val relationId by loveViewModel.relationId
@@ -69,6 +84,20 @@ fun SettingsScreen(
     var inputCode by remember { mutableStateOf(TextFieldValue("")) }
 
     val members by loveViewModel.members
+    
+    var profilePicUri by remember { 
+        mutableStateOf(sharedPrefs.getString("profile_pic_uri", null)?.let { Uri.parse(it) }) 
+    }
+    var showProfileMenu by remember { mutableStateOf(false) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            profilePicUri = it
+            sharedPrefs.edit().putString("profile_pic_uri", it.toString()).apply()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -78,25 +107,85 @@ fun SettingsScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
         
-        Text(
-            text = strings.settings,
-            fontSize = 32.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 16.dp)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = strings.settings,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold
+            )
+            
+            // Profile Picture Circle
+            Box {
+                Surface(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, LovePink, CircleShape)
+                        .clickable { showProfileMenu = true },
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    if (profilePicUri != null) {
+                        AsyncImage(
+                            model = profilePicUri,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.padding(12.dp),
+                            tint = Color.Gray
+                        )
+                    }
+                }
+                
+                DropdownMenu(
+                    expanded = showProfileMenu,
+                    onDismissRequest = { showProfileMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(strings.changeProfilePic) },
+                        leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null) },
+                        onClick = {
+                            showProfileMenu = false
+                            imagePickerLauncher.launch("image/*")
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(strings.changeActiveProfile) },
+                        leadingIcon = { Icon(Icons.Default.SwitchAccount, contentDescription = null) },
+                        onClick = {
+                            showProfileMenu = false
+                            // Add logic here if needed
+                            Toast.makeText(context, strings.comingSoon, Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                        text = { Text(strings.logout, color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = {
+                            showProfileMenu = false
+                            FirebaseAuth.getInstance().signOut()
+                            onLogout()
+                        }
+                    )
+                }
+            }
+        }
 
         // --- SECCIÓN: PAREJA Y ENLACE ---
-        SettingsGroup(title = "Relación") {
+        SettingsGroup(title = strings.relation) {
             if (relationId != null) {
                 SettingsClickableRow(
-                    label = "Estado de Relación",
-                    value = "¡Enlazado! (${members.size} integrantes)",
-                    icon = Icons.Default.Favorite,
-                    onClick = { showRelationDetailsDialog = true }
-                )
-                SettingsClickableRow(
-                    label = "Detalles de Relación",
-                    value = "Ver integrantes y código",
+                    label = strings.relationStatus,
+                    value = strings.linkedStatus.format(members.size),
                     icon = Icons.Default.Groups,
                     onClick = { showRelationDetailsDialog = true }
                 )
@@ -105,24 +194,23 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Desvincular pareja")
+                    Text(strings.unlinkPartner)
                 }
             } else {
                 SettingsClickableRow(
-                    label = "Vincular con mi pareja",
+                    label = strings.linkWithPartner,
                     value = if (linkingCode != null) {
                         val formatted = linkingCode?.chunked(4)?.joinToString("-") ?: ""
-                        "Código: $formatted"
-                    } else "Generar código",
+                        "${strings.linkingCodeLabel.replace(":", "")} $formatted"
+                    } else strings.generateCode,
                     icon = Icons.Default.Link,
                     onClick = { 
                         if (linkingCode == null) loveViewModel.generateLinkingCode()
                         else {
-                            // Copiar al portapapeles (el código sin guiones para que sea fácil de pegar)
                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                             val clip = android.content.ClipData.newPlainText("Código de Enlace", linkingCode)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "Código copiado", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.codeCopied, Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
@@ -133,12 +221,12 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Generar otro código", fontSize = 12.sp)
+                        Text(strings.generateAnotherCode, fontSize = 12.sp)
                     }
                 }
                 SettingsClickableRow(
-                    label = "Tengo un código",
-                    value = "Ingresar código de pareja",
+                    label = strings.haveCode,
+                    value = strings.enterPartnerCode,
                     icon = Icons.Default.QrCodeScanner,
                     onClick = { showLinkDialog = true }
                 )
@@ -146,7 +234,7 @@ fun SettingsScreen(
         }
 
         // --- SECCIÓN: PERFIL Y PERSONALIZACIÓN ---
-        SettingsGroup(title = "Personalización") {
+        SettingsGroup(title = strings.customization) {
             SettingsInputRow(
                 label = strings.userName,
                 value = tempName,
@@ -160,12 +248,53 @@ fun SettingsScreen(
                 value = tempTitle,
                 onValueChange = { tempTitle = it },
                 onSave = { onMainTitleChange(tempTitle) },
-                icon = Icons.Default.Title
+                icon = Icons.Default.Title,
+                onDelete = {
+                    tempTitle = ""
+                    onMainTitleChange("")
+                },
+                placeholder = strings.mainTitleTooltip
+            )
+
+            // Relationship Start Date
+            var showDatePicker by remember { mutableStateOf(false) }
+            val datePickerState = rememberDatePickerState(initialSelectedDateMillis = currentRelationshipDate)
+            
+            if (showDatePicker) {
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            onRelationshipDateChange(datePickerState.selectedDateMillis)
+                            showDatePicker = false
+                        }) { Text(strings.confirm) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { 
+                            showDatePicker = false 
+                        }) { Text(strings.cancel) }
+                    }
+                ) {
+                    DatePicker(state = datePickerState)
+                }
+            }
+
+            val dateDisplay = currentRelationshipDate?.let {
+                java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            } ?: strings.notSelected
+
+            SettingsClickableRow(
+                label = strings.relationshipDate,
+                value = dateDisplay,
+                icon = Icons.Default.CalendarToday,
+                onClick = { showDatePicker = true },
+                onDelete = { onRelationshipDateChange(null) }
             )
         }
 
         // --- SECCIÓN: APARIENCIA ---
-        SettingsGroup(title = "Apariencia") {
+        SettingsGroup(title = strings.appearance) {
             // Tema
             SettingsDropdownRow(
                 label = strings.appTheme,
@@ -175,7 +304,7 @@ fun SettingsScreen(
                     ThemeMode.System -> strings.system
                 },
                 icon = Icons.Default.Palette
-            ) {
+            ) { onDismiss ->
                 ThemeMode.entries.forEach { mode ->
                     val label = when(mode) {
                         ThemeMode.Light -> strings.light
@@ -184,7 +313,10 @@ fun SettingsScreen(
                     }
                     DropdownMenuItem(
                         text = { Text(label) },
-                        onClick = { onThemeChange(mode) }
+                        onClick = { 
+                            onThemeChange(mode)
+                            onDismiss()
+                        }
                     )
                 }
             }
@@ -195,22 +327,25 @@ fun SettingsScreen(
                 label = strings.language,
                 currentValue = currentLangLabel,
                 icon = Icons.Default.Language
-            ) {
+            ) { onDismiss ->
                 AppLanguage.entries.forEach { language ->
                     DropdownMenuItem(
                         text = { Text(language.label) },
-                        onClick = { onLanguageChange(language.code) }
+                        onClick = { 
+                            onLanguageChange(language.code)
+                            onDismiss()
+                        }
                     )
                 }
             }
         }
 
         // --- SECCIÓN: CONTENIDO Y WIDGET ---
-        SettingsGroup(title = "Contenido") {
+        SettingsGroup(title = strings.content) {
             // Categorías Visibles (Diálogo para no saturar)
             SettingsClickableRow(
                 label = strings.visibleCategoriesLabel,
-                value = "${currentVisibleCategories.size} seleccionadas",
+                value = strings.selectedCount.format(currentVisibleCategories.size),
                 icon = Icons.Default.Visibility,
                 onClick = { showCategoriesDialog = true }
             )
@@ -218,7 +353,7 @@ fun SettingsScreen(
             // Configuración Widget
             SettingsClickableRow(
                 label = strings.widgetContent,
-                value = "${currentWidgetConfigs.size} módulos",
+                value = strings.modulesCount.format(currentWidgetConfigs.size),
                 icon = Icons.Default.Widgets,
                 onClick = { showWidgetDialog = true }
             )
@@ -226,25 +361,29 @@ fun SettingsScreen(
             // Auto-rotar Switch
             SettingsSwitchRow(
                 label = strings.dynamicWidget,
-                subtitle = strings.dynamicWidgetDesc,
-                checked = isAutoRotateEnabled,
+                subtitle = if (currentWidgetConfigs.size < 2) strings.selectAtLeastTwo else strings.dynamicWidgetDesc,
+                checked = isAutoRotateEnabled && currentWidgetConfigs.size >= 2,
                 onCheckedChange = onAutoRotateChange,
-                icon = Icons.AutoMirrored.Filled.RotateRight
+                icon = Icons.AutoMirrored.Filled.RotateRight,
+                enabled = currentWidgetConfigs.size >= 2
             )
         }
 
         // --- SECCIÓN: SISTEMA ---
-        SettingsGroup(title = "Sistema") {
+        SettingsGroup(title = strings.system) {
             // Moneda
             SettingsDropdownRow(
                 label = strings.localCurrency,
                 currentValue = currentCurrency,
                 icon = Icons.Default.Payments
-            ) {
+            ) { onDismiss ->
                 listOf("COP", "USD", "EUR").forEach { currency ->
                     DropdownMenuItem(
                         text = { Text(currency) },
-                        onClick = { onCurrencyChange(currency) }
+                        onClick = { 
+                            onCurrencyChange(currency)
+                            onDismiss()
+                        }
                     )
                 }
             }
@@ -255,36 +394,17 @@ fun SettingsScreen(
         val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
 
         if (currentUserId in privateUserIds) {
-            SettingsGroup(title = "Administración") {
+            SettingsGroup(title = strings.admin) {
                 SettingsClickableRow(
-                    label = "Sincronizar Datos",
-                    value = "Actualizar Firebase",
+                    label = strings.syncData,
+                    value = strings.updateFirebase,
                     icon = Icons.Default.CloudSync,
                     onClick = {
                         onSyncQuestions()
-                        Toast.makeText(context, "Sincronizando...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strings.synchronizing, Toast.LENGTH_SHORT).show()
                     }
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = {
-                FirebaseAuth.getInstance().signOut()
-                onLogout()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                contentColor = MaterialTheme.colorScheme.error
-            )
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Cerrar Sesión")
         }
 
         Spacer(modifier = Modifier.height(48.dp))
@@ -293,10 +413,10 @@ fun SettingsScreen(
         if (showRelationDetailsDialog) {
             AlertDialog(
                 onDismissRequest = { showRelationDetailsDialog = false },
-                title = { Text("Detalles de la Relación") },
+                title = { Text(strings.relationDetails) },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("Integrantes:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                        Text(strings.members, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
                         members.forEach { member ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -304,14 +424,14 @@ fun SettingsScreen(
                             ) {
                                 Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = LovePink)
                                 Spacer(Modifier.width(8.dp))
-                                Text(if (member.name.isNotBlank()) member.name else "Usuario sin nombre")
+                                Text(if (member.name.isNotBlank()) member.name else strings.unnamedUser)
                             }
                         }
                         
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        com.lexnicholls.lovecounter.ui.components.HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                         
-                        Text("Código de Enlace:", fontWeight = FontWeight.Bold)
-                        val codeToShow = linkingCode ?: "Sin código generado"
+                        Text(strings.linkingCodeLabel, fontWeight = FontWeight.Bold)
+                        val codeToShow = linkingCode ?: strings.noCodeGenerated
                         val formatted = codeToShow.chunked(4).joinToString("-")
                         
                         Row(
@@ -325,7 +445,7 @@ fun SettingsScreen(
                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                     val clip = android.content.ClipData.newPlainText("Código de Enlace", linkingCode)
                                     clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, "Código copiado", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, strings.codeCopied, Toast.LENGTH_SHORT).show()
                                 } else {
                                     loveViewModel.generateLinkingCode()
                                 }
@@ -333,12 +453,12 @@ fun SettingsScreen(
                                 Icon(if (linkingCode != null) Icons.Default.ContentCopy else Icons.Default.Refresh, contentDescription = "Acción")
                             }
                         }
-                        Text("Comparte este código para que más personas se unan a esta relación.", fontSize = 12.sp, color = Color.Gray)
+                        Text(strings.shareCodeDesc, fontSize = 12.sp, color = Color.Gray)
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = { showRelationDetailsDialog = false }) {
-                        Text("Cerrar")
+                        Text(strings.close)
                     }
                 }
             )
@@ -355,6 +475,7 @@ fun SettingsScreen(
                             "dates" to strings.dates,
                             "market" to strings.market,
                             "bucket" to strings.bucket,
+                            "drawing" to strings.drawing,
                             "movies" to strings.movies,
                             "daily" to strings.daily
                         )
@@ -375,7 +496,7 @@ fun SettingsScreen(
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { showCategoriesDialog = false }) { Text("OK") } }
+                confirmButton = { TextButton(onClick = { showCategoriesDialog = false }) { Text(strings.confirm) } }
             )
         }
 
@@ -403,26 +524,26 @@ fun SettingsScreen(
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { showWidgetDialog = false }) { Text("OK") } }
+                confirmButton = { TextButton(onClick = { showWidgetDialog = false }) { Text(strings.confirm) } }
             )
         }
 
         if (showLinkDialog) {
             com.lexnicholls.lovecounter.ui.components.LoveAlertDialog(
                 onDismissRequest = { showLinkDialog = false },
-                title = "Vincular con pareja",
+                title = strings.linkWithPartner,
                 onConfirm = {
                     val rawCode = inputCode.text.filter { it.isDigit() }
                     if (rawCode.length == 16) {
                         loveViewModel.linkWithPartner(rawCode)
                         showLinkDialog = false
                     } else {
-                        Toast.makeText(context, "El código debe tener 16 dígitos", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strings.codeMustBe16Digits, Toast.LENGTH_SHORT).show()
                     }
                 }
             ) {
                 Column {
-                    Text("Ingresa el código de 16 dígitos generado por tu pareja.", fontSize = 14.sp, color = Color.Gray)
+                    Text(strings.linkDialogDesc, fontSize = 14.sp, color = Color.Gray)
                     Spacer(Modifier.height(16.dp))
                     com.lexnicholls.lovecounter.ui.components.LoveTextField(
                         value = inputCode,
@@ -430,21 +551,18 @@ fun SettingsScreen(
                             val digitsOnly = newValue.text.filter { it.isDigit() }
                             val limitedDigits = if (digitsOnly.length > 16) digitsOnly.take(16) else digitsOnly
                             
-                            // Re-formatear con guiones
                             val formatted = limitedDigits.chunked(4).joinToString("-")
                             
-                            // Si el texto ha cambiado, movemos el cursor al final de lo nuevo
                             if (formatted != inputCode.text) {
                                 inputCode = TextFieldValue(
                                     text = formatted,
                                     selection = TextRange(formatted.length)
                                 )
                             } else {
-                                // Si solo ha cambiado la selección (el cursor), la mantenemos
                                 inputCode = newValue
                             }
                         },
-                        label = "Código de Enlace",
+                        label = strings.linkingCodeLabel.replace(":", ""),
                         placeholder = "1234-5678-9012-3456",
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                     )
@@ -480,7 +598,15 @@ fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-fun SettingsInputRow(label: String, value: String, onValueChange: (String) -> Unit, onSave: () -> Unit, icon: ImageVector) {
+fun SettingsInputRow(
+    label: String, 
+    value: String, 
+    onValueChange: (String) -> Unit, 
+    onSave: () -> Unit, 
+    icon: ImageVector,
+    onDelete: (() -> Unit)? = null,
+    placeholder: String? = null
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -489,22 +615,49 @@ fun SettingsInputRow(label: String, value: String, onValueChange: (String) -> Un
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = label, fontSize = 14.sp, color = Color.Gray)
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
-            )
+            Box(contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty() && placeholder != null) {
+                    Text(
+                        text = placeholder, 
+                        color = LovePink.copy(alpha = 0.5f), 
+                        fontSize = 16.sp, 
+                        fontStyle = FontStyle.Italic
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
-        IconButton(onClick = onSave) {
-            Icon(Icons.Default.Check, contentDescription = "Guardar", tint = MaterialTheme.colorScheme.primary)
+        
+        Row {
+            if (onDelete != null && value.isNotBlank()) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+            IconButton(onClick = onSave) {
+                Icon(Icons.Default.Check, contentDescription = "Guardar", tint = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }
 
 @Composable
-fun SettingsDropdownRow(label: String, currentValue: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
+fun SettingsDropdownRow(
+    label: String, 
+    currentValue: String, 
+    icon: ImageVector, 
+    content: @Composable ColumnScope.(onDismiss: () -> Unit) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
+    var itemWidth by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+
+    Box(modifier = Modifier.fillMaxWidth().onGloballyPositioned { itemWidth = it.size.width }) {
         Row(
             modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -517,17 +670,25 @@ fun SettingsDropdownRow(label: String, currentValue: String, icon: ImageVector, 
             }
             Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Gray)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            // Pasamos una lambda que cierre el menú además de la acción
-            Column {
-                content()
-            }
+        
+        DropdownMenu(
+            expanded = expanded, 
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.width(with(density) { itemWidth.toDp() })
+        ) {
+            content { expanded = false }
         }
     }
 }
 
 @Composable
-fun SettingsClickableRow(label: String, value: String, icon: ImageVector, onClick: () -> Unit) {
+fun SettingsClickableRow(
+    label: String, 
+    value: String, 
+    icon: ImageVector, 
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)? = null
+) {
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -538,22 +699,56 @@ fun SettingsClickableRow(label: String, value: String, icon: ImageVector, onClic
             Text(text = label, fontSize = 14.sp, color = Color.Gray)
             Text(text = value, fontSize = 16.sp)
         }
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray)
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (onDelete != null && value != t().notSelected) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray)
+        }
     }
 }
 
 @Composable
-fun SettingsSwitchRow(label: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector) {
+fun SettingsSwitchRow(
+    label: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector,
+    enabled: Boolean = true
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (enabled) Color.Gray else Color.Gray.copy(alpha = 0.3f),
+            modifier = Modifier.size(24.dp)
+        )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, fontSize = 16.sp)
-            Text(text = subtitle, fontSize = 12.sp, color = Color.Gray)
+            Text(
+                text = label,
+                fontSize = 16.sp,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            )
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = if (enabled) Color.Gray else Color.Gray.copy(alpha = 0.3f)
+            )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
+        )
     }
 }
