@@ -48,7 +48,7 @@ object MovieClient {
             val requestBuilder = original.newBuilder()
                 .url(url)
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "LoveCounterApp/1.0")
+                .addHeader("User-Agent", "MeldApp/1.0")
 
             val request = requestBuilder.build()
             chain.proceed(request)

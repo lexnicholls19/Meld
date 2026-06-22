@@ -60,7 +60,7 @@ import com.lexnicholls.lovecounter.viewmodel.LoveViewModel
 class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
     ) { isGranted: Boolean ->
         if (isGranted) {
             Log.d("Permissions", "Notification permission granted")
@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
             val isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
             val context = LocalContext.current
-            val sharedPrefs = remember { context.getSharedPreferences("prefs", Context.MODE_PRIVATE) }
+            val sharedPrefs = remember { context.getSharedPreferences("prefs", MODE_PRIVATE) }
             val deviceId = remember {
                 val id = sharedPrefs.getString("device_id", null) ?: java.util.UUID.randomUUID().toString()
                 sharedPrefs.edit().putString("device_id", id).apply()
@@ -186,7 +186,7 @@ class MainActivity : ComponentActivity() {
 
             val scope = rememberCoroutineScope()
 
-            com.lexnicholls.lovecounter.ui.theme.LoveCounterTheme(
+            com.lexnicholls.lovecounter.ui.theme.MeldTheme(
                 darkTheme = useDarkTheme,
                 dynamicColor = false // Set to true if you want Android 12+ dynamic colors
             ) {
@@ -236,7 +236,7 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         floatingActionButton = {
                             val currentRoute = currentDestination?.route
-                            if (currentRoute == Screen.Main.name && !isMainReorderMode) {
+                            if ((currentRoute == Screen.Main.name) && !isMainReorderMode) {
                                 Column(
                                     horizontalAlignment = Alignment.End,
                                     verticalArrangement = Arrangement.Bottom

@@ -3,7 +3,7 @@ package com.lexnicholls.lovecounter.ui.screens
 import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
+import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Picture
 import android.graphics.Rect
 import android.graphics.RectF
@@ -59,19 +59,19 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
     val db = FirebaseFirestore.getInstance()
     val strings = t()
 
-    var currentPath by remember { mutableStateOf<Path?>(null) }
+    var currentPath by remember { mutableStateOf<Path?>(value = null) }
     val paths = remember { mutableStateListOf<DrawingPath>() }
-    var selectedColor by remember { mutableStateOf(Color.Black) }
-    var backgroundColor by remember { mutableStateOf(Color.White) }
-    var isEraserMode by remember { mutableStateOf(false) }
-    var strokeSize by remember { mutableFloatStateOf(15f) }
+    var selectedColor by remember { mutableStateOf(value = Color.Black) }
+    var backgroundColor by remember { mutableStateOf(value = Color.White) }
+    var isEraserMode by remember { mutableStateOf(value = false) }
+    var strokeSize by remember { mutableFloatStateOf(value = 15f) }
     
-    var showHistory by remember { mutableStateOf(false) }
-    var drawingsHistory by remember { mutableStateOf<List<DrawingData>>(emptyList()) }
-    var isSending by remember { mutableStateOf(false) }
-    var backgroundBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var showHistory by remember { mutableStateOf(value = false) }
+    var drawingsHistory by remember { mutableStateOf<List<DrawingData>>(value = emptyList()) }
+    var isSending by remember { mutableStateOf(value = false) }
+    var backgroundBitmap by remember { mutableStateOf<ImageBitmap?>(value = null) }
     
-    var selectedDrawingForView by remember { mutableStateOf<DrawingData?>(null) }
+    var selectedDrawingForView by remember { mutableStateOf<DrawingData?>(value = null) }
 
     val picture = remember { Picture() }
     val internalCanvasSize = 1024f
@@ -104,12 +104,14 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { 
-                        loadHistory(db, userId) { 
-                            drawingsHistory = it
-                            showHistory = true 
+                    IconButton(
+                        onClick = { 
+                            loadDrawingHistory(db, userId) { 
+                                drawingsHistory = it
+                                showHistory = true 
+                            }
                         }
-                    }) {
+                    ) {
                         Icon(Icons.Default.History, contentDescription = strings.todayDrawings)
                     }
                 }
@@ -141,7 +143,7 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                                     color = if (backgroundColor == color) LovePink else Color.LightGray,
                                     shape = CircleShape
                                 )
-                                .clickable { backgroundColor = color }
+                                .clickable { backgroundColor = color },
                         )
                     }
                 }
@@ -167,8 +169,8 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                                     .clip(CircleShape)
                                     .background(color)
                                     .border(
-                                        width = if (selectedColor == color && !isEraserMode) 3.dp else 0.dp,
-                                        color = if (selectedColor == color && !isEraserMode) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                        width = if ((selectedColor == color) && !isEraserMode) 3.dp else 0.dp,
+                                        color = if ((selectedColor == color) && !isEraserMode) MaterialTheme.colorScheme.primary else Color.Transparent,
                                         shape = CircleShape
                                     )
                                     .clickable { 
@@ -180,20 +182,26 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                     }
                     
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { isEraserMode = !isEraserMode }) {
+                        IconButton(
+                            onClick = { isEraserMode = !isEraserMode }
+                        ) {
                             Icon(
                                 if (isEraserMode) Icons.Default.Brush else Icons.Default.AutoFixHigh,
                                 contentDescription = strings.eraser,
-                                tint = if (isEraserMode) LovePink else Color.Gray
+                                tint = if (isEraserMode) LovePink else Color.Gray,
                             )
                         }
-                        IconButton(onClick = { if (paths.isNotEmpty()) paths.removeAt(paths.size - 1) }) {
+                        IconButton(
+                            onClick = { if (paths.isNotEmpty()) paths.removeAt(paths.size - 1) }
+                        ) {
                             Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = strings.undo, tint = Color.Gray)
                         }
-                        IconButton(onClick = { 
-                            paths.clear() 
-                            backgroundBitmap = null
-                        }) {
+                        IconButton(
+                            onClick = { 
+                                paths.clear() 
+                                backgroundBitmap = null
+                            }
+                        ) {
                             Icon(Icons.Default.Delete, contentDescription = strings.deleteAll, tint = Color.Gray)
                         }
                     }
@@ -206,7 +214,7 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(label, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
-                    Text("${strokeSize.roundToInt()}", fontSize = 12.sp, color = LovePink, fontWeight = FontWeight.Bold)
+                    Text(strokeSize.roundToInt().toString(), fontSize = 12.sp, color = LovePink, fontWeight = FontWeight.Bold)
                 }
                 Slider(
                     value = strokeSize,
@@ -313,13 +321,13 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
 
             Button(
                 onClick = {
-                    if (paths.isNotEmpty() || backgroundBitmap != null || backgroundColor != Color.White) {
+                    if ((paths.isNotEmpty()) || (backgroundBitmap != null) || (backgroundColor != Color.White)) {
                         isSending = true
                         
                         // CREATE STANDARD SIZE BITMAP (1024x1024)
                         val standardSize = internalCanvasSize.toInt()
                         val resultBitmap = Bitmap.createBitmap(standardSize, standardSize, Bitmap.Config.ARGB_8888)
-                        val resultCanvas = Canvas(resultBitmap)
+                        val resultCanvas = AndroidCanvas(resultBitmap)
                         
                         // Scale the picture from current screen size to standard size
                         val scaleX = standardSize.toFloat() / picture.width.toFloat()
@@ -331,7 +339,7 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                         resultBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
                         val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
 
-                        saveDrawing(db, userId, userName, base64) {
+                        saveCanvasDrawing(db, userId, userName, base64) {
                             isSending = false
                             paths.clear()
                             backgroundBitmap = null
@@ -343,7 +351,7 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = !isSending && (paths.isNotEmpty() || backgroundBitmap != null || backgroundColor != Color.White)
+                enabled = !isSending && ((paths.isNotEmpty()) || (backgroundBitmap != null) || (backgroundColor != Color.White)),
             ) {
                 if (isSending) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
@@ -402,26 +410,30 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                             .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(text = strings.sentAt.format(formatTimestamp(drawing.timestamp)), fontSize = 12.sp, color = Color.Gray)
+                    Text(text = strings.sentAt.format(formatDrawingTimestamp(drawing.timestamp)), fontSize = 12.sp, color = Color.Gray)
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    saveImageToGallery(context, bitmap, "Dibujo_${drawing.createdBy}_${System.currentTimeMillis()}")
-                }) {
+                Button(
+                    onClick = {
+                        saveDrawingToGallery(context, bitmap, "Dibujo_${drawing.createdBy}_${System.currentTimeMillis()}")
+                    }
+                ) {
                     Icon(Icons.Default.Download, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(strings.download)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { 
-                    backgroundBitmap = bitmap.asImageBitmap()
-                    selectedDrawingForView = null 
-                }) {
+                TextButton(
+                    onClick = { 
+                        backgroundBitmap = bitmap.asImageBitmap()
+                        selectedDrawingForView = null 
+                    }
+                ) {
                     Text(strings.editAdd)
                 }
-            }
+            },
         )
     }
 }
@@ -442,17 +454,17 @@ fun DrawingHistoryItem(drawing: DrawingData, onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(text = "${strings.addedBy}: ${drawing.createdBy}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text(text = "${strings.sentAt.split(" ")[0]}: ${formatTimestamp(drawing.timestamp)}", fontSize = 12.sp, color = Color.Gray)
+                Text(text = "${strings.sentAt.split(" ")[0]}: ${formatDrawingTimestamp(drawing.timestamp)}", fontSize = 12.sp, color = Color.Gray)
             }
         }
     }
 }
 
-fun loadHistory(db: FirebaseFirestore, userId: String, onResult: (List<DrawingData>) -> Unit) {
+fun loadDrawingHistory(db: FirebaseFirestore, userId: String, onResult: (List<DrawingData>) -> Unit) {
     val calendar = Calendar.getInstance()
-    calendar.set(Calendar.HOUR_OF_DAY, 0)
-    calendar.set(Calendar.MINUTE, 0)
-    calendar.set(Calendar.SECOND, 0)
+    calendar[Calendar.HOUR_OF_DAY] = 0
+    calendar[Calendar.MINUTE] = 0
+    calendar[Calendar.SECOND] = 0
     val todayStart = calendar.time
 
     db.collection("users").document(userId).collection("drawings")
@@ -465,17 +477,17 @@ fun loadHistory(db: FirebaseFirestore, userId: String, onResult: (List<DrawingDa
         }
 }
 
-fun saveDrawing(db: FirebaseFirestore, userId: String, userName: String, base64: String, onComplete: () -> Unit) {
+fun saveCanvasDrawing(db: FirebaseFirestore, userId: String, userName: String, base64: String, onComplete: () -> Unit) {
     val data = hashMapOf(
         "createdBy" to userName,
         "timestamp" to Timestamp.now(),
-        "base64Data" to base64
+        "base64Data" to base64,
     )
     db.collection("users").document(userId).collection("drawings").add(data)
         .addOnSuccessListener { onComplete() }
 }
 
-fun saveImageToGallery(context: android.content.Context, bitmap: Bitmap, filename: String) {
+fun saveDrawingToGallery(context: android.content.Context, bitmap: Bitmap, filename: String) {
     val sharedPrefs = context.getSharedPreferences("prefs", android.content.Context.MODE_PRIVATE)
     val langCode = sharedPrefs.getString("app_language", "system") ?: "system"
     val strings = getStringsForLanguage(langCode)
@@ -502,7 +514,7 @@ fun saveImageToGallery(context: android.content.Context, bitmap: Bitmap, filenam
     }
 }
 
-fun formatTimestamp(timestamp: Timestamp?): String {
+fun formatDrawingTimestamp(timestamp: Timestamp?): String {
     if (timestamp == null) return ""
     val date = timestamp.toDate()
     val sdf = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -512,12 +524,12 @@ fun formatTimestamp(timestamp: Timestamp?): String {
 data class DrawingData(
     val createdBy: String = "",
     val timestamp: Timestamp? = null,
-    val base64Data: String = ""
+    val base64Data: String = "",
 )
 
 data class DrawingPath(
     val path: Path,
     val color: Color,
     val strokeWidth: Float = 15f,
-    val isEraser: Boolean = false
+    val isEraser: Boolean = false,
 )

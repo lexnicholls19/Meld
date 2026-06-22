@@ -48,13 +48,12 @@ fun AppBackground(content: @Composable () -> Unit) {
 }
 
 @Composable
-fun HorizontalDivider(modifier: Modifier = Modifier, color: Color = Color.LightGray) {
+fun HorizontalDivider(modifier: Modifier = Modifier, color: Color = Color.LightGray.copy(alpha = 0.5f)) {
     Box(
         modifier = modifier
-            .height(1.dp)
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            // Simulating a divider with a Box if Material 3 one isn't desired
+            .height(1.dp)
+            .background(color)
     )
 }
 

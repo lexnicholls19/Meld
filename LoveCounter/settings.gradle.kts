@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LoveCounter"
+rootProject.name = "Meld"
 include(":app")

@@ -39,7 +39,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun LoveCounterTheme(
+fun MeldTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
@@ -64,6 +64,8 @@ fun LoveCounterTheme(
             window.statusBarColor = Color.Transparent.toArgb()
             
             val insetsController = WindowCompat.getInsetsController(window, view)
+            // isAppearanceLightStatusBars = true pone los iconos OSCUROS (para fondo claro)
+            // isAppearanceLightStatusBars = false pone los iconos CLAROS (para fondo oscuro)
             insetsController.isAppearanceLightStatusBars = !darkTheme
         }
     }

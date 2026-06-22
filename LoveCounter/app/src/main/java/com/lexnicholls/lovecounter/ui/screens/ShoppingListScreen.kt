@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -123,8 +122,8 @@ fun ShoppingListScreen(
         val categoriesRegistration = categoriesDoc.addSnapshotListener { snapshot, e ->
             if (e != null) return@addSnapshotListener
             if (snapshot != null && snapshot.exists()) {
-                val list = snapshot.get("list") as? List<String>
-                if (list != null && list.isNotEmpty()) {
+                val list = snapshot["list"] as? List<String>
+                if (!list.isNullOrEmpty()) {
                     tabs = list
                 }
             }
