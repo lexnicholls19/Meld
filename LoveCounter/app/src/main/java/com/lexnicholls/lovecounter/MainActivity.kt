@@ -33,6 +33,8 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.compose.*
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.google.firebase.messaging.FirebaseMessaging
 import androidx.glance.appwidget.updateAll
 import com.lexnicholls.lovecounter.ui.navigation.Screen
@@ -130,6 +132,12 @@ class MainActivity : ComponentActivity() {
             var appLanguage by rememberSaveable {
                 mutableStateOf(sharedPrefs.getString("app_language", "system") ?: "system")
             }
+            var fabMessage1 by rememberSaveable {
+                mutableStateOf(sharedPrefs.getString("fab_message_1", null))
+            }
+            var fabMessage2 by rememberSaveable {
+                mutableStateOf(sharedPrefs.getString("fab_message_2", null))
+            }
             var relationshipDate by rememberSaveable {
                 val saved = sharedPrefs.getLong("relationship_date", -1L)
                 mutableStateOf(if (saved == -1L) null else saved)
@@ -193,6 +201,8 @@ class MainActivity : ComponentActivity() {
                 ProvideStrings(appLanguage) {
                     val strings = t()
                     var showAddDialog by rememberSaveable { mutableStateOf(false) }
+                    var showDeleteMoviesDialog by rememberSaveable { mutableStateOf(false) }
+                    var isMovieSelectionMode by remember { mutableStateOf(false) }
                     var isCompletedViewOpen by rememberSaveable { mutableStateOf(false) }
                     var showExitDialog by rememberSaveable { mutableStateOf(false) }
                     var isGiftExpanded by rememberSaveable { mutableStateOf(false) }
@@ -203,6 +213,8 @@ class MainActivity : ComponentActivity() {
                         isCompletedViewOpen = false
                         isGiftExpanded = false
                         isMainReorderMode = false
+                        isMovieSelectionMode = false
+                        showDeleteMoviesDialog = false
                     }
 
                     // Handle System Back Button
@@ -258,7 +270,7 @@ class MainActivity : ComponentActivity() {
                                                     shadowElevation = 2.dp
                                                 ) {
                                                     Text(
-                                                        text = "${t().missYou} 💛",
+                                                        text = fabMessage1 ?: "${t().missYou} 💛",
                                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                                         fontSize = 14.sp,
                                                         fontWeight = FontWeight.Medium
@@ -267,7 +279,8 @@ class MainActivity : ComponentActivity() {
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 SmallFloatingActionButton(
                                                     onClick = { 
-                                                        sendInterpretedNotification(context, strings.loveExtraLabel, "${strings.missYou} 💛", userName)
+                                                        val msg = fabMessage1 ?: "${strings.missYou} 💛"
+                                                        sendInterpretedNotification(context, strings.loveExtraLabel, msg, userName)
                                                         isGiftExpanded = false
                                                     },
                                                     containerColor = TertiaryColor,
@@ -288,7 +301,7 @@ class MainActivity : ComponentActivity() {
                                                     shadowElevation = 2.dp
                                                 ) {
                                                     Text(
-                                                        text = "${strings.loveYou} ✨",
+                                                        text = fabMessage2 ?: "${strings.loveYou} ✨",
                                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                                         fontSize = 14.sp,
                                                         fontWeight = FontWeight.Medium
@@ -297,7 +310,8 @@ class MainActivity : ComponentActivity() {
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 SmallFloatingActionButton(
                                                     onClick = { 
-                                                        sendInterpretedNotification(context, strings.loveExtraLabel, "${strings.loveYou} ✨", userName)
+                                                        val msg = fabMessage2 ?: "${strings.loveYou} ✨"
+                                                        sendInterpretedNotification(context, strings.loveExtraLabel, msg, userName)
                                                         isGiftExpanded = false
                                                         showConfetti = true
                                                     },
@@ -319,13 +333,22 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
+                            } else if (isMovieSelectionMode && currentRoute == Screen.Movies.name) {
+                                FloatingActionButton(
+                                    onClick = { showDeleteMoviesDialog = true },
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = Color.White
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = strings.delete)
+                                }
                             } else if (!isMainReorderMode && 
                                 !isCompletedViewOpen &&
                                 currentRoute != Screen.DailyConnection.name && 
                                 currentRoute != Screen.Settings.name && 
-                                currentRoute != Screen.Movies.name &&
                                 currentRoute != Screen.Login.name &&
-                                currentRoute != Screen.Register.name
+                                currentRoute != Screen.Register.name &&
+                                currentRoute != Screen.Welcome.name &&
+                                currentRoute != Screen.Drawing.name
                             ) {
                                 FloatingActionButton(onClick = { showAddDialog = true }) {
                                     Icon(Icons.Default.Add, contentDescription = strings.add)
@@ -496,11 +519,38 @@ class MainActivity : ComponentActivity() {
                                         }
                                         composable(Screen.Welcome.name) {
                                             WelcomeScreen(
-                                                onContinue = {
-                                                    val uid = FirebaseAuth.getInstance().currentUser?.uid
-                                                    if (uid != null) {
-                                                        sharedPrefs.edit().putBoolean("first_time_$uid", false).apply()
+                                                onContinue = { name, title, categories, date, profileUri, currency, f1, f2 ->
+                                                    userName = name
+                                                    mainTitle = title
+                                                    visibleCategories = categories
+                                                    relationshipDate = date
+                                                    localCurrency = currency
+                                                    fabMessage1 = f1
+                                                    fabMessage2 = f2
+                                                    
+                                                    loveViewModel.updateProfile(name)
+                                                    
+                                                    sharedPrefs.edit().apply {
+                                                        putString("user_name", name)
+                                                        putString("main_screen_title", title)
+                                                        putString("visible_categories", categories.joinToString(","))
+                                                        putString("local_currency", currency)
+                                                        putString("fab_message_1", f1)
+                                                        putString("fab_message_2", f2)
+                                                        if (date != null) {
+                                                            putLong("relationship_date", date)
+                                                        }
+                                                        if (profileUri != null) {
+                                                            putString("profile_pic_uri", profileUri.toString())
+                                                        }
+                                                        
+                                                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                                                        if (uid != null) {
+                                                            putBoolean("first_time_$uid", false)
+                                                        }
+                                                        apply()
                                                     }
+
                                                     navController.navigate(Screen.Main.name) {
                                                         popUpTo(Screen.Welcome.name) { inclusive = true }
                                                     }
@@ -580,12 +630,32 @@ class MainActivity : ComponentActivity() {
                                         }
                                         composable(Screen.Movies.name) {
                                             MoviesListScreen(
-                                                deviceId = deviceId,
                                                 userName = userName,
                                                 showAddDialog = showAddDialog,
+                                                showDeleteDialog = showDeleteMoviesDialog,
                                                 onDismissDialog = { showAddDialog = false },
-                                                onAddClick = { showAddDialog = true },
+                                                onDismissDeleteDialog = { showDeleteMoviesDialog = false },
+                                                onMovieClick = { id, type -> 
+                                                    navController.navigate("${Screen.MovieDetail.name}/$id/$type")
+                                                },
+                                                onSelectionChange = { isMovieSelectionMode = it },
                                                 userId = sharedId ?: ""
+                                            )
+                                        }
+                                        composable(
+                                            route = "${Screen.MovieDetail.name}/{movieId}/{type}",
+                                            arguments = listOf(
+                                                navArgument("movieId") { type = NavType.StringType },
+                                                navArgument("type") { type = NavType.StringType }
+                                            )
+                                        ) { backStackEntry ->
+                                            val mId = backStackEntry.arguments?.getString("movieId") ?: ""
+                                            val mType = backStackEntry.arguments?.getString("type") ?: "movie"
+                                            MovieDetailScreen(
+                                                userId = sharedId ?: "",
+                                                movieId = mId,
+                                                mediaType = mType,
+                                                onBack = { navController.popBackStack() }
                                             )
                                         }
                                         composable(Screen.DailyConnection.name) {
@@ -623,6 +693,7 @@ class MainActivity : ComponentActivity() {
                                                     val trimmedName = newName.trim()
                                                     userName = trimmedName
                                                     sharedPrefs.edit().putString("user_name", trimmedName).commit()
+                                                    loveViewModel.updateProfile(trimmedName)
                                                 },
                                                 onMainTitleChange = { newTitle ->
                                                     mainTitle = newTitle
@@ -643,6 +714,10 @@ class MainActivity : ComponentActivity() {
                                                     } else {
                                                         sharedPrefs.edit().remove("relationship_date").commit()
                                                     }
+                                                },
+                                                onFabMessagesChange = { m1, m2 ->
+                                                    fabMessage1 = m1
+                                                    fabMessage2 = m2
                                                 },
                                                 onWidgetConfigsChange = { configs ->
                                                     widgetConfigs = configs

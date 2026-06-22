@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,7 +41,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.lexnicholls.lovecounter.ui.navigation.ThemeMode
 import com.lexnicholls.lovecounter.ui.theme.LovePink
 import com.lexnicholls.lovecounter.util.AppLanguage
+import com.lexnicholls.lovecounter.util.ProfileImageManager
 import com.lexnicholls.lovecounter.util.t
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +66,7 @@ fun SettingsScreen(
     onAutoRotateChange: (Boolean) -> Unit,
     onCurrencyChange: (String) -> Unit,
     onRelationshipDateChange: (Long?) -> Unit,
+    onFabMessagesChange: (String, String) -> Unit,
     onLogout: () -> Unit,
     onSyncQuestions: () -> Unit = {}
 ) {
@@ -70,13 +74,21 @@ fun SettingsScreen(
     val strings = t()
     val sharedPrefs = remember { context.getSharedPreferences("prefs", android.content.Context.MODE_PRIVATE) }
     val loveViewModel: com.lexnicholls.lovecounter.viewmodel.LoveViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val scope = rememberCoroutineScope()
     
     val relationId by loveViewModel.relationId
     val linkingCode by loveViewModel.linkingCode
     val isLinking by loveViewModel.isLinking
+    val currentUserProfile by loveViewModel.currentUserProfile
 
     var tempName by remember { mutableStateOf(currentName) }
     var tempTitle by remember { mutableStateOf(currentMainTitle) }
+    var tempFab1 by remember { 
+        mutableStateOf(sharedPrefs.getString("fab_message_1", "${strings.missYou} 💛") ?: "${strings.missYou} 💛") 
+    }
+    var tempFab2 by remember { 
+        mutableStateOf(sharedPrefs.getString("fab_message_2", "${strings.loveYou} ✨") ?: "${strings.loveYou} ✨") 
+    }
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var showWidgetDialog by remember { mutableStateOf(false) }
     var showLinkDialog by remember { mutableStateOf(false) }
@@ -86,7 +98,17 @@ fun SettingsScreen(
     val members by loveViewModel.members
     
     var profilePicUri by remember { 
-        mutableStateOf(sharedPrefs.getString("profile_pic_uri", null)?.let { Uri.parse(it) }) 
+        mutableStateOf<Any?>(
+            ProfileImageManager.getLocalProfileFile(context) ?: 
+            sharedPrefs.getString("profile_pic_uri", null)?.let { Uri.parse(it) } ?:
+            currentUserProfile?.profilePicUrl
+        )
+    }
+
+    LaunchedEffect(currentUserProfile?.profilePicUrl) {
+        if (profilePicUri == null || profilePicUri is String) {
+            profilePicUri = ProfileImageManager.getLocalProfileFile(context) ?: currentUserProfile?.profilePicUrl
+        }
     }
     var showProfileMenu by remember { mutableStateOf(false) }
 
@@ -96,6 +118,8 @@ fun SettingsScreen(
         uri?.let {
             profilePicUri = it
             sharedPrefs.edit().putString("profile_pic_uri", it.toString()).apply()
+            ProfileImageManager.saveToInternalStorage(context, it)
+            scope.launch { ProfileImageManager.uploadToCloud(context, it) }
         }
     }
 
@@ -256,6 +280,28 @@ fun SettingsScreen(
                 placeholder = strings.mainTitleTooltip
             )
 
+            // FAB Actions
+            SettingsInputRow(
+                label = strings.quickAction1,
+                value = tempFab1,
+                onValueChange = { tempFab1 = it },
+                onSave = { 
+                    sharedPrefs.edit().putString("fab_message_1", tempFab1).apply()
+                    onFabMessagesChange(tempFab1, tempFab2)
+                },
+                icon = Icons.Default.FavoriteBorder
+            )
+            SettingsInputRow(
+                label = strings.quickAction2,
+                value = tempFab2,
+                onValueChange = { tempFab2 = it },
+                onSave = { 
+                    sharedPrefs.edit().putString("fab_message_2", tempFab2).apply()
+                    onFabMessagesChange(tempFab1, tempFab2)
+                },
+                icon = Icons.Default.Favorite
+            )
+
             // Relationship Start Date
             var showDatePicker by remember { mutableStateOf(false) }
             val datePickerState = rememberDatePickerState(initialSelectedDateMillis = currentRelationshipDate)
@@ -275,7 +321,10 @@ fun SettingsScreen(
                         }) { Text(strings.cancel) }
                     }
                 ) {
-                    DatePicker(state = datePickerState)
+                    DatePicker(
+                        state = datePickerState,
+                        modifier = Modifier.pointerInput(Unit) {}
+                    )
                 }
             }
 

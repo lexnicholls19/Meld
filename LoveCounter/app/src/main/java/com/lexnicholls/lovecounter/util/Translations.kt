@@ -71,6 +71,7 @@ data class Strings(
     val cleaning: String,
     val product: String,
     val category: String,
+    val type: String,
     val location: String,
     val selectDate: String,
     val back: String,
@@ -178,6 +179,9 @@ data class Strings(
     val syncData: String,
     val updateFirebase: String,
     val synchronizing: String,
+    val quickActions: String,
+    val quickAction1: String,
+    val quickAction2: String,
     
     // Main Screen Reorder
     val reorderCategories: String,
@@ -228,7 +232,16 @@ data class Strings(
     val drawingSaved: String,
     val drawingError: String,
     val drawingSent: String,
-    val newDrawingNotification: String
+    val newDrawingNotification: String,
+    val skipInitialConfig: String,
+    val skipInitialConfigConfirm: String,
+    val displayMode: String,
+    val compactGrid: String,
+    val comfortableGrid: String,
+    val coverOnlyGrid: String,
+    val listMode: String,
+    val itemsPerRow: String,
+    val display: String
 )
 
 val SpanishStrings = Strings(
@@ -287,6 +300,7 @@ val SpanishStrings = Strings(
     cleaning = "Limpiando",
     product = "Producto",
     category = "Categoría",
+    type = "Tipo",
     location = "Lugar",
     selectDate = "Selecciona una fecha",
     back = "Volver",
@@ -432,7 +446,19 @@ val SpanishStrings = Strings(
     drawingSaved = "Imagen guardada en Galería",
     drawingError = "Error al guardar imagen",
     drawingSent = "Dibujo enviado ✨",
-    newDrawingNotification = "¡Hay un nuevo dibujo disponible! 🎨"
+    newDrawingNotification = "¡Hay un nuevo dibujo disponible! 🎨",
+    quickActions = "Acciones rápidas (FAB)",
+    quickAction1 = "Acción rápida 1",
+    quickAction2 = "Acción rápida 2",
+    skipInitialConfig = "¿Saltar configuración?",
+    skipInitialConfigConfirm = "¿Deseas saltar la configuración inicial? Podrás ajustar todo luego en los ajustes.",
+    displayMode = "Modo de visualización",
+    compactGrid = "Cuadrícula compacta",
+    comfortableGrid = "Cuadrícula cómoda",
+    coverOnlyGrid = "Solo portadas",
+    listMode = "Lista",
+    itemsPerRow = "Ítems por fila",
+    display = "Diseño"
 )
 
 val EnglishStrings = Strings(
@@ -491,6 +517,7 @@ val EnglishStrings = Strings(
     cleaning = "Cleaning",
     product = "Product",
     category = "Category",
+    type = "Type",
     location = "Location",
     selectDate = "Select a date",
     back = "Back",
@@ -636,7 +663,19 @@ val EnglishStrings = Strings(
     drawingSaved = "Image saved to Gallery",
     drawingError = "Error saving image",
     drawingSent = "Drawing sent ✨",
-    newDrawingNotification = "A new drawing is available! 🎨"
+    newDrawingNotification = "A new drawing is available! 🎨",
+    quickActions = "Quick actions (FAB)",
+    quickAction1 = "Quick action 1",
+    quickAction2 = "Quick action 2",
+    skipInitialConfig = "Skip configuration?",
+    skipInitialConfigConfirm = "Do you want to skip the initial configuration? You can adjust everything later in settings.",
+    displayMode = "Display mode",
+    compactGrid = "Compact grid",
+    comfortableGrid = "Comfortable grid",
+    coverOnlyGrid = "Cover-only grid",
+    listMode = "List",
+    itemsPerRow = "Items per row",
+    display = "Display"
 )
 
 val FrenchStrings = EnglishStrings.copy(

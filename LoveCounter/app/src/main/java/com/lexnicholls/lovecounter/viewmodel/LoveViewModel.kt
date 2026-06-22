@@ -22,7 +22,8 @@ data class User(
     val uid: String = "",
     val name: String = "",
     val deviceId: String = "",
-    val relationId: String? = null
+    val relationId: String? = null,
+    val profilePicUrl: String? = null
 )
 
 @HiltViewModel
@@ -59,6 +60,9 @@ class LoveViewModel @Inject constructor(
 
     private val _members = mutableStateOf<List<User>>(emptyList())
     val members: State<List<User>> = _members
+
+    private val _currentUserProfile = mutableStateOf<User?>(null)
+    val currentUserProfile: State<User?> = _currentUserProfile
 
     private var membersListener: ListenerRegistration? = null
 
@@ -135,6 +139,9 @@ class LoveViewModel @Inject constructor(
         db.collection("users").document(currentUserId)
             .addSnapshotListener { snapshot, _ ->
                 if (snapshot != null) {
+                    val user = snapshot.toObject(User::class.java)?.copy(uid = snapshot.id)
+                    _currentUserProfile.value = user
+
                     val pId = snapshot.getString("partnerId")
                     val rId = snapshot.getString("relationId")
                     _relationId.value = rId
@@ -333,6 +340,13 @@ class LoveViewModel @Inject constructor(
             "deviceId" to deviceId
         )
         db.collection("partner_status").document(userName).set(data)
+    }
+
+    fun updateProfile(name: String, profilePicUrl: String? = null) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val updates = mutableMapOf<String, Any>("name" to name)
+        profilePicUrl?.let { updates["profilePicUrl"] = it }
+        db.collection("users").document(uid).update(updates)
     }
 
     fun refresh() {
