@@ -26,7 +26,11 @@ class CinemaRepositoryImpl @Inject constructor(
 
     override suspend fun getMovieDetail(movieId: String, type: String, region: String, lang: String): Result<MeldMovie> {
         return runCatching {
-            apiService.getMediaDetail(movieId, type, region, lang).toDomain()
+            val responseBody = apiService.getMediaDetailRaw(movieId, type, region, lang).string()
+            android.util.Log.d("CinemaRepository", "RAW Response: $responseBody")
+            
+            val response = com.google.gson.Gson().fromJson(responseBody, com.lexnicholls.lovecounter.data.remote.NetworkMeldMovieDto::class.java)
+            response.toDomain()
         }
     }
 
@@ -39,14 +43,20 @@ class CinemaRepositoryImpl @Inject constructor(
             releaseYear = this.releaseYear,
             rating = this.rating,
             mediaType = this.mediaType ?: "movie",
-            platforms = this.platforms?.map { it.toDomain() } ?: emptyList()
+            platforms = this.platforms?.map { it.toDomain() } ?: emptyList(),
+            duration = this.duration,
+            episodeCount = this.finalEpisodeCount,
+            seasonCount = this.finalSeasonCount
         )
     }
 
     private fun NetworkMeldPlatformDto.toDomain(): MeldPlatform {
+        android.util.Log.d("CinemaRepository", "Mapping platform: $name, raw_url: $url, raw_link: $link, raw_web_url: $webUrl")
         return MeldPlatform(
             name = this.name,
-            logoUrl = this.logoUrl
+            logoUrl = this.logoUrl,
+            url = this.url ?: this.webUrl,
+            deepLink = this.link
         )
     }
 }

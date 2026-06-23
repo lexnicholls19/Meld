@@ -11,14 +11,20 @@ data class MeldMovie(
     val category: String = "",
     val platforms: List<MeldPlatform> = emptyList(),
     val watchState: WatchState = WatchState.UNWATCHED,
+    val watchedDate: Long? = null,
     val addedBy: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val language: String = ""
+    val language: String = "",
+    val duration: Int? = null, // In minutes for movies
+    val episodeCount: Int? = null, // For TV
+    val seasonCount: Int? = null // For TV
 )
 
 data class MeldPlatform(
     val name: String = "",
-    val logoUrl: String = ""
+    val logoUrl: String = "",
+    val url: String? = null,
+    val deepLink: String? = null
 )
 
 enum class WatchState {

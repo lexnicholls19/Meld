@@ -28,6 +28,8 @@ data class Strings(
     val dates: String,
     val dynamicWidget: String,
     val dynamicWidgetDesc: String,
+    val autoRotateInterval: String,
+    val seconds: String,
     val selectAtLeastTwo: String,
     val localCurrency: String,
     val currencyDesc: String,
@@ -106,6 +108,7 @@ data class Strings(
     val addItem: String,
     val categoryName: String,
     val optionalShort: String,
+    val markedAsWatchedOn: String,
     val productPlaceholder: String,
     val additionalData: String,
     val mapError: String,
@@ -124,6 +127,7 @@ data class Strings(
     val series: String,
     val films: String,
     val seen: String,
+    val watched: String,
     val drawing: String,
     val drawingDesc: String,
     val comingSoon: String,
@@ -195,6 +199,7 @@ data class Strings(
     val currency: String,
     val cannotMixItems: String,
     val deleteBought: String,
+    val widgetUpdateWarning: String,
     
     // Bucket List
     val addNew: String,
@@ -241,7 +246,11 @@ data class Strings(
     val coverOnlyGrid: String,
     val listMode: String,
     val itemsPerRow: String,
-    val display: String
+    val display: String,
+    val deleteCategoryWarning: String,
+    val episodes: String,
+    val seasons: String,
+    val duration: String
 )
 
 val SpanishStrings = Strings(
@@ -257,6 +266,8 @@ val SpanishStrings = Strings(
     dates = "Fechas especiales",
     dynamicWidget = "Widget dinámico",
     dynamicWidgetDesc = "El widget rotará entre las opciones seleccionadas",
+    autoRotateInterval = "Intervalo de rotación",
+    seconds = "%d segundos",
     selectAtLeastTwo = "Selecciona al menos 2 módulos",
     localCurrency = "Moneda local",
     currencyDesc = "Se usará en la lista de mercado",
@@ -334,6 +345,7 @@ val SpanishStrings = Strings(
     addItem = "Añadir nuevo ítem",
     categoryName = "Nombre de la Categoría",
     optionalShort = "opcional",
+    markedAsWatchedOn = "Marcado como visto el %s",
     productPlaceholder = "Nombre del producto",
     additionalData = "Datos adicionales",
     mapError = "No se pudo abrir el mapa",
@@ -352,6 +364,7 @@ val SpanishStrings = Strings(
     series = "Series",
     films = "Películas",
     seen = "Vista",
+    watched = "Visto",
     drawing = "Dibujo libre",
     drawingDesc = "Realiza un dibujo que verá tu relación",
     comingSoon = "Próximamente",
@@ -415,6 +428,7 @@ val SpanishStrings = Strings(
     currency = "Moneda",
     cannotMixItems = "No puedes mezclar items pendientes y comprados",
     deleteBought = "Borrar Comprados",
+    widgetUpdateWarning = "Actualiza el widget para ver los cambios✨",
     addNew = "Añadir nuevo",
     selectCategory = "Seleccionar Categoría",
     parentCategory = "Categoría Padre",
@@ -458,7 +472,11 @@ val SpanishStrings = Strings(
     coverOnlyGrid = "Solo portadas",
     listMode = "Lista",
     itemsPerRow = "Ítems por fila",
-    display = "Diseño"
+    display = "Diseño",
+    deleteCategoryWarning = "Al ocultar esta categoría, todos los registros asociados a ella se eliminarán permanentemente de la base de datos. ¿Deseas continuar?",
+    episodes = "Episodios",
+    seasons = "Temporadas",
+    duration = "Duración"
 )
 
 val EnglishStrings = Strings(
@@ -474,6 +492,8 @@ val EnglishStrings = Strings(
     dates = "Special Dates",
     dynamicWidget = "Dynamic Widget",
     dynamicWidgetDesc = "The widget will rotate between selected options",
+    autoRotateInterval = "Rotation interval",
+    seconds = "%d seconds",
     selectAtLeastTwo = "Select at least 2 modules",
     localCurrency = "Local Currency",
     currencyDesc = "Used in the shopping list",
@@ -551,6 +571,7 @@ val EnglishStrings = Strings(
     addItem = "Add new item",
     categoryName = "Category Name",
     optionalShort = "optional",
+    markedAsWatchedOn = "Marked as watched on %s",
     productPlaceholder = "Product name",
     additionalData = "Additional data",
     mapError = "Could not open map",
@@ -569,6 +590,7 @@ val EnglishStrings = Strings(
     series = "Series",
     films = "Movies",
     seen = "Seen",
+    watched = "Watched",
     drawing = "Free drawing",
     drawingDesc = "Make a drawing that your partner will see",
     comingSoon = "Coming Soon",
@@ -632,6 +654,7 @@ val EnglishStrings = Strings(
     currency = "Currency",
     cannotMixItems = "You cannot mix pending and bought items",
     deleteBought = "Delete Bought",
+    widgetUpdateWarning = "Update the widget to see the changes✨",
     addNew = "Add new",
     selectCategory = "Select Category",
     parentCategory = "Parent Category",
@@ -675,7 +698,11 @@ val EnglishStrings = Strings(
     coverOnlyGrid = "Cover-only grid",
     listMode = "List",
     itemsPerRow = "Items per row",
-    display = "Display"
+    display = "Display",
+    deleteCategoryWarning = "By hiding this category, all records associated with it will be permanently deleted from the database. Do you want to continue?",
+    episodes = "Episodes",
+    seasons = "Seasons",
+    duration = "Duration"
 )
 
 val FrenchStrings = EnglishStrings.copy(
@@ -746,6 +773,7 @@ val FrenchStrings = EnglishStrings.copy(
     addItem = "Ajouter un nouvel élément",
     categoryName = "Nom de la catégorie",
     optionalShort = "facultatif",
+    markedAsWatchedOn = "Marqué comme vu le %s",
     productPlaceholder = "Nom du produit",
     additionalData = "Données supplémentaires",
     mapError = "Impossible d'ouvrir la carte",
@@ -764,6 +792,7 @@ val FrenchStrings = EnglishStrings.copy(
     series = "Séries",
     films = "Films",
     seen = "Vu",
+    watched = "Vu",
     drawing = "Dessin libre",
     drawingDesc = "Faites un dessin que votre partenaire verra",
     movieTitle = "Titre",
@@ -852,6 +881,7 @@ val GermanStrings = EnglishStrings.copy(
     addItem = "Neues Element hinzufügen",
     categoryName = "Kategoriename",
     optionalShort = "optional",
+    markedAsWatchedOn = "Markiert als gesehen am %s",
     productPlaceholder = "Produktname",
     additionalData = "Zusätzliche Daten",
     mapError = "Karte konnte nicht geöffnet werden",
@@ -870,6 +900,7 @@ val GermanStrings = EnglishStrings.copy(
     series = "Serien",
     films = "Filme",
     seen = "Gesehen",
+    watched = "Gesehen",
     drawing = "Freies Zeichnen",
     drawingDesc = "Machen Sie una Zeichnung, die Ihr Partner sehen wird",
     movieTitle = "Titel",
@@ -958,6 +989,7 @@ val PortugueseStrings = EnglishStrings.copy(
     addItem = "Adicionar novo item",
     categoryName = "Nome da Categoria",
     optionalShort = "opcional",
+    markedAsWatchedOn = "Marcado como visto em %s",
     productPlaceholder = "Nome do producto",
     additionalData = "Dados adicionais",
     mapError = "Não foi posible abrir o mapa",
@@ -976,6 +1008,7 @@ val PortugueseStrings = EnglishStrings.copy(
     series = "Séries",
     films = "Filmes",
     seen = "Vista",
+    watched = "Assistido",
     drawing = "Desenho libre",
     drawingDesc = "Faça um desenho que seu parceiro verá",
     movieTitle = "Título",

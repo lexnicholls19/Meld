@@ -52,15 +52,32 @@ class CinemaViewModel @Inject constructor(
             val doc = db.collection("users").document(userId).collection("movies").document(movieId).get().await()
             if (doc.exists()) {
                 val movie = doc.toObject(MeldMovie::class.java)
-                // Si el idioma de la sinopsis guardada no coincide con el actual de la app, forzamos actualización desde red
-                if (movie != null && movie.language == userLang && movie.overview.isNotBlank()) {
+                val hasPlatformUrls = movie?.platforms?.any { !it.url.isNullOrBlank() } ?: false
+                val hasDeepLinks = movie?.platforms?.any { !it.deepLink.isNullOrBlank() } ?: false
+                
+                // Nueva verificación: ¿Tenemos la información detallada (duración/episodios)?
+                val hasDetailedInfo = if (movie?.mediaType == "tv") {
+                    movie.episodeCount != null && movie.seasonCount != null
+                } else {
+                    movie?.duration != null
+                }
+
+                // Si el idioma no coincide o faltan datos clave, actualizamos desde red
+                if (movie != null && movie.language == userLang && movie.overview.isNotBlank() && 
+                    hasPlatformUrls && hasDeepLinks && hasDetailedInfo) {
                     _selectedMovie.value = movie
                 } else {
                     repository.getMovieDetail(movieId, type, userRegion, userLang)
                         .onSuccess { 
-                            val updatedMovie = it.copy(addedBy = movie?.addedBy ?: "", language = userLang)
+                            val updatedMovie = it.copy(
+                                addedBy = movie?.addedBy ?: "", 
+                                category = movie?.category ?: "", // Preservar la categoría (ej: k drama, crunchyroll)
+                                language = userLang,
+                                watchState = movie?.watchState ?: com.lexnicholls.lovecounter.domain.model.WatchState.IN_WATCHLIST,
+                                watchedDate = movie?.watchedDate
+                            )
                             _selectedMovie.value = updatedMovie
-                            // Opcional: Actualizar Firestore con la nueva traducción
+                            // Actualizar Firestore con la nueva traducción y plataformas, manteniendo el estado de visto
                             db.collection("users").document(userId).collection("movies").document(movieId).set(updatedMovie)
                         }
                         .onFailure { _error.value = it.message }
@@ -104,5 +121,42 @@ class CinemaViewModel @Inject constructor(
         db.collection("users").document(userId).collection("movies")
             .document(movieId)
             .delete()
+    }
+
+    fun updateWatchState(userId: String, movieId: String, newState: com.lexnicholls.lovecounter.domain.model.WatchState) {
+        val watchedDate = if (newState == com.lexnicholls.lovecounter.domain.model.WatchState.WATCHED) System.currentTimeMillis() else null
+        val updates = mapOf(
+            "watchState" to newState,
+            "watchedDate" to watchedDate
+        )
+        db.collection("users").document(userId).collection("movies")
+            .document(movieId)
+            .update(updates)
+            .addOnSuccessListener {
+                if (_selectedMovie.value?.id == movieId) {
+                    _selectedMovie.value = _selectedMovie.value?.copy(
+                        watchState = newState,
+                        watchedDate = watchedDate
+                    )
+                }
+            }
+    }
+
+    fun removeMoviesByCategory(userId: String, categoryName: String) {
+        viewModelScope.launch {
+            try {
+                val snapshot = db.collection("users").document(userId).collection("movies")
+                    .whereEqualTo("category", categoryName)
+                    .get().await()
+                
+                val batch = db.batch()
+                snapshot.documents.forEach { doc ->
+                    batch.delete(doc.reference)
+                }
+                batch.commit().await()
+            } catch (e: Exception) {
+                _error.value = e.message
+            }
+        }
     }
 }

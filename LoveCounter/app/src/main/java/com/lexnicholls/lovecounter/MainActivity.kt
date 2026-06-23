@@ -123,6 +123,9 @@ class MainActivity : ComponentActivity() {
             var autoRotateWidget by rememberSaveable {
                 mutableStateOf(sharedPrefs.getBoolean("widget_auto_rotate", false))
             }
+            var autoRotateInterval by rememberSaveable {
+                mutableStateOf(sharedPrefs.getInt("widget_rotate_interval", 60))
+            }
             var localCurrency by rememberSaveable {
                 mutableStateOf(sharedPrefs.getString("local_currency", "COP") ?: "COP")
             }
@@ -680,6 +683,7 @@ class MainActivity : ComponentActivity() {
                                                 currentName = userName,
                                                 currentWidgetConfigs = widgetConfigs,
                                                 isAutoRotateEnabled = autoRotateWidget,
+                                                currentAutoRotateInterval = autoRotateInterval,
                                                 currentCurrency = localCurrency,
                                                 currentMainTitle = mainTitle,
                                                 currentLanguage = appLanguage,
@@ -723,13 +727,22 @@ class MainActivity : ComponentActivity() {
                                                     widgetConfigs = configs
                                                     sharedPrefs.edit().putString("widget_configs", configs.joinToString(",")).commit()
                                                     scope.launch {
-                                                        delay(200)
+                                                        delay(300)
+                                                        // Use updateAll to broadcast to all instances
                                                         com.lexnicholls.lovecounter.widget.LoveWidget().updateAll(context.applicationContext)
                                                     }
                                                 },
                                                 onAutoRotateChange = { enabled ->
                                                     autoRotateWidget = enabled
                                                     sharedPrefs.edit().putBoolean("widget_auto_rotate", enabled).commit()
+                                                    scope.launch {
+                                                        delay(200)
+                                                        com.lexnicholls.lovecounter.widget.LoveWidget().updateAll(context.applicationContext)
+                                                    }
+                                                },
+                                                onAutoRotateIntervalChange = { interval ->
+                                                    autoRotateInterval = interval
+                                                    sharedPrefs.edit().putInt("widget_rotate_interval", interval).commit()
                                                     scope.launch {
                                                         delay(200)
                                                         com.lexnicholls.lovecounter.widget.LoveWidget().updateAll(context.applicationContext)
