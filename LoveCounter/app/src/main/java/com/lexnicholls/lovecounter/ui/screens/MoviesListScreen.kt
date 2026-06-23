@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -70,6 +72,8 @@ fun MoviesListScreen(
     
     val selectedIds = remember { mutableStateListOf<String>() }
     val isSelectionMode by remember { derivedStateOf { selectedIds.isNotEmpty() } }
+    
+    val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { tabs.size })
 
     LaunchedEffect(isSelectionMode) {
         onSelectionChange(isSelectionMode)
@@ -77,6 +81,13 @@ fun MoviesListScreen(
 
     LaunchedEffect(selectedTab) {
         viewModel.clearResults()
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.animateScrollToPage(selectedTab)
+        }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        selectedTab = pagerState.currentPage
     }
 
     DisposableEffect(userId) {
@@ -235,7 +246,10 @@ fun MoviesListScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -264,64 +278,72 @@ fun MoviesListScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        val filteredList = watchlist.filter { it.category == currentCategory }
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f),
+            pageSpacing = 16.dp,
+            verticalAlignment = Alignment.Top
+        ) { pageIndex ->
+            val currentCategoryPage = tabs[pageIndex]
+            val filteredList = watchlist.filter { it.category == currentCategoryPage }
 
-        if (filteredList.isEmpty()) {
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text(
-                    text = strings.noItemsYet, 
-                    color = Color.Gray, 
-                    modifier = Modifier.fillMaxWidth(), 
-                    textAlign = TextAlign.Center
-                )
-            }
-        } else {
-            if (displayMode == DisplayMode.LIST) {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(filteredList, key = { it.id }) { movie ->
-                        val isSelected = selectedIds.contains(movie.id)
-                        MovieRow(
-                            movie = movie,
-                            onClick = {
-                                if (isSelectionMode) {
-                                    if (isSelected) selectedIds.remove(movie.id) else selectedIds.add(movie.id)
-                                } else {
-                                    onMovieClick(movie.id, movie.mediaType)
-                                }
-                            },
-                            onDelete = { viewModel.removeMovieFromWatchlist(userId, movie.id) }
-                        )
-                    }
+            if (filteredList.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = strings.noItemsYet, 
+                        color = Color.Gray, 
+                        modifier = Modifier.fillMaxWidth(), 
+                        textAlign = TextAlign.Center
+                    )
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = if (itemsPerRow == 1f) GridCells.Adaptive(120.dp) else GridCells.Fixed(itemsPerRow.toInt()),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(filteredList, key = { it.id }) { movie ->
-                        val isSelected = selectedIds.contains(movie.id)
-                        MovieGridItem(
-                            movie = movie,
-                            isSelected = isSelected,
-                            displayMode = displayMode,
-                            onClick = { 
-                                if (isSelectionMode) {
-                                    if (isSelected) selectedIds.remove(movie.id) else selectedIds.add(movie.id)
-                                } else {
-                                    onMovieClick(movie.id, movie.mediaType) 
+                if (displayMode == DisplayMode.LIST) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredList, key = { it.id }) { movie ->
+                            val isSelected = selectedIds.contains(movie.id)
+                            MovieRow(
+                                movie = movie,
+                                onClick = {
+                                    if (isSelectionMode) {
+                                        if (isSelected) selectedIds.remove(movie.id) else selectedIds.add(movie.id)
+                                    } else {
+                                        onMovieClick(movie.id, movie.mediaType)
+                                    }
+                                },
+                                onDelete = { viewModel.removeMovieFromWatchlist(userId, movie.id) }
+                            )
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = if (itemsPerRow == 1f) GridCells.Adaptive(120.dp) else GridCells.Fixed(itemsPerRow.toInt()),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredList, key = { it.id }) { movie ->
+                            val isSelected = selectedIds.contains(movie.id)
+                            MovieGridItem(
+                                movie = movie,
+                                isSelected = isSelected,
+                                displayMode = displayMode,
+                                onClick = { 
+                                    if (isSelectionMode) {
+                                        if (isSelected) selectedIds.remove(movie.id) else selectedIds.add(movie.id)
+                                    } else {
+                                        onMovieClick(movie.id, movie.mediaType) 
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!isSelectionMode) selectedIds.add(movie.id)
                                 }
-                            },
-                            onLongClick = {
-                                if (!isSelectionMode) selectedIds.add(movie.id)
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }

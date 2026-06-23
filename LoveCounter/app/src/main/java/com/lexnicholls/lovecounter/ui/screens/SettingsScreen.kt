@@ -52,6 +52,7 @@ fun SettingsScreen(
     currentName: String,
     currentWidgetConfigs: Set<String>,
     isAutoRotateEnabled: Boolean,
+    currentAutoRotateInterval: Int,
     currentCurrency: String,
     currentMainTitle: String,
     currentLanguage: String,
@@ -64,6 +65,7 @@ fun SettingsScreen(
     onVisibleCategoriesChange: (Set<String>) -> Unit,
     onWidgetConfigsChange: (Set<String>) -> Unit,
     onAutoRotateChange: (Boolean) -> Unit,
+    onAutoRotateIntervalChange: (Int) -> Unit,
     onCurrencyChange: (String) -> Unit,
     onRelationshipDateChange: (Long?) -> Unit,
     onFabMessagesChange: (String, String) -> Unit,
@@ -94,6 +96,10 @@ fun SettingsScreen(
     var showLinkDialog by remember { mutableStateOf(false) }
     var showRelationDetailsDialog by remember { mutableStateOf(false) }
     var inputCode by remember { mutableStateOf(TextFieldValue("")) }
+
+    var showDeleteCategoryConfirm by remember { mutableStateOf<String?>(null) }
+    val cinemaViewModel: com.lexnicholls.lovecounter.viewmodel.CinemaViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     val members by loveViewModel.members
     
@@ -416,6 +422,24 @@ fun SettingsScreen(
                 icon = Icons.AutoMirrored.Filled.RotateRight,
                 enabled = currentWidgetConfigs.size >= 2
             )
+
+            if (isAutoRotateEnabled && currentWidgetConfigs.size >= 2) {
+                SettingsDropdownRow(
+                    label = strings.autoRotateInterval,
+                    currentValue = strings.seconds.format(currentAutoRotateInterval),
+                    icon = Icons.Default.Timer
+                ) { onDismiss ->
+                    listOf(15, 30, 60).forEach { seconds ->
+                        DropdownMenuItem(
+                            text = { Text(strings.seconds.format(seconds)) },
+                            onClick = {
+                                onAutoRotateIntervalChange(seconds)
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
+            }
         }
 
         // --- SECCIÓN: SISTEMA ---
@@ -531,21 +555,77 @@ fun SettingsScreen(
                         categories.forEach { (id, label) ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    val newSet = if (currentVisibleCategories.contains(id)) currentVisibleCategories - id else currentVisibleCategories + id
-                                    onVisibleCategoriesChange(newSet)
+                                    if (currentVisibleCategories.contains(id)) {
+                                        // Si estamos desactivando una categoría, mostramos advertencia
+                                        showDeleteCategoryConfirm = id
+                                    } else {
+                                        onVisibleCategoriesChange(currentVisibleCategories + id)
+                                    }
                                 },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Checkbox(checked = currentVisibleCategories.contains(id), onCheckedChange = {
-                                    val newSet = if (it) currentVisibleCategories + id else currentVisibleCategories - id
-                                    onVisibleCategoriesChange(newSet)
-                                })
+                                Checkbox(
+                                    checked = currentVisibleCategories.contains(id),
+                                    onCheckedChange = { isChecked ->
+                                        if (!isChecked) {
+                                            showDeleteCategoryConfirm = id
+                                        } else {
+                                            onVisibleCategoriesChange(currentVisibleCategories + id)
+                                        }
+                                    }
+                                )
                                 Text(label)
                             }
                         }
                     }
                 },
                 confirmButton = { TextButton(onClick = { showCategoriesDialog = false }) { Text(strings.confirm) } }
+            )
+        }
+
+        if (showDeleteCategoryConfirm != null) {
+            val categoryId = showDeleteCategoryConfirm!!
+            val categoryName = when(categoryId) {
+                "reminders" -> strings.reminders
+                "dates" -> strings.dates
+                "market" -> strings.market
+                "bucket" -> strings.bucket
+                "drawing" -> strings.drawing
+                "movies" -> strings.movies
+                "daily" -> strings.daily
+                else -> categoryId
+            }
+            
+            AlertDialog(
+                onDismissRequest = { showDeleteCategoryConfirm = null },
+                title = { Text(strings.delete + " " + categoryName) },
+                text = { Text(strings.deleteCategoryWarning) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            // 1. Eliminar registros de la base de datos si es necesario
+                            if (categoryId == "movies") {
+                                // Para películas el usuario mencionó específicamente borrar registros
+                                cinemaViewModel.removeMoviesByCategory(userId, "Series")
+                                cinemaViewModel.removeMoviesByCategory(userId, "Películas")
+                                // También manejamos categorías personalizadas si existieran, 
+                                // pero según la UI son "Series" y "Películas"
+                            }
+                            
+                            // 2. Ocultar categoría
+                            onVisibleCategoriesChange(currentVisibleCategories - categoryId)
+                            showDeleteCategoryConfirm = null
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(strings.yes)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteCategoryConfirm = null }) {
+                        Text(strings.cancel)
+                    }
+                }
             )
         }
 
@@ -573,7 +653,12 @@ fun SettingsScreen(
                         }
                     }
                 },
-                confirmButton = { TextButton(onClick = { showWidgetDialog = false }) { Text(strings.confirm) } }
+                confirmButton = { 
+                    TextButton(onClick = { 
+                        showWidgetDialog = false 
+                        Toast.makeText(context, strings.widgetUpdateWarning, Toast.LENGTH_LONG).show()
+                    }) { Text(strings.confirm) } 
+                }
             )
         }
 
