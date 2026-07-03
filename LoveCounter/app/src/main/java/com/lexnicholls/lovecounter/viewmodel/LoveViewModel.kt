@@ -23,6 +23,7 @@ data class User(
     val name: String = "",
     val deviceId: String = "",
     val relationId: String? = null,
+    val relationIds: List<String> = emptyList(),
     val profilePicUrl: String? = null
 )
 
@@ -30,7 +31,7 @@ data class User(
 class LoveViewModel @Inject constructor(
     private val db: FirebaseFirestore
 ) : ViewModel() {
-    
+
     private val _currentTime = mutableStateOf(LocalDateTime.now())
     val currentTime: State<LocalDateTime> = _currentTime
 
@@ -49,6 +50,9 @@ class LoveViewModel @Inject constructor(
     private val _relationId = mutableStateOf<String?>(null)
     val relationId: State<String?> = _relationId
 
+    private val _relationIds = mutableStateOf<List<String>>(emptyList())
+    val relationIds: State<List<String>> = _relationIds
+
     private val _sharedId = mutableStateOf<String?>(FirebaseAuth.getInstance().currentUser?.uid)
     val sharedId: State<String?> = _sharedId
 
@@ -64,15 +68,26 @@ class LoveViewModel @Inject constructor(
     private val _currentUserProfile = mutableStateOf<User?>(null)
     val currentUserProfile: State<User?> = _currentUserProfile
 
+    private val _availableRelations = mutableStateOf<Map<String, String>>(emptyMap())
+    val availableRelations: State<Map<String, String>> = _availableRelations
+
+    private val _incomingMessage = mutableStateOf<Pair<String, String>?>(null)
+    val incomingMessage: State<Pair<String, String>?> = _incomingMessage
+
     private var membersListener: ListenerRegistration? = null
+    private var relationsListener: ListenerRegistration? = null
+    private var currentRelationListener: ListenerRegistration? = null
+    private val messagesListeners = mutableMapOf<String, ListenerRegistration>()
 
     private val privateUserIds = setOf(
-        "CX4z9DcQYxTJeaIdyNgzpDQqw6U2", // Alexander
+        "66817fc6-c66c-49bb-b0fe-089cbbe70b2c", // Alexander (Relation ID as Fallback)
         "pW562p0UqNfEicrVd0q3oRRE9373"  // Laura
     )
 
+    private val ADMIN_RELATION_ID = "66817fc6-c66c-49bb-b0fe-089cbbe70b2c"
+
     init {
-        // Cargar preguntas desde Firebase
+        // Cargar preguntas públicas inicialmente
         viewModelScope.launch {
             QuestionsRepository.loadQuestions(db)
             observePartnerId()
@@ -93,7 +108,9 @@ class LoveViewModel @Inject constructor(
      */
     fun syncQuestionsToFirebase() {
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
-        if (currentUserId !in privateUserIds) {
+        val currentRelationId = _relationId.value
+        
+        if (currentUserId !in privateUserIds && currentRelationId != ADMIN_RELATION_ID) {
             Log.e("Sync", "Acceso denegado: Solo administradores pueden sincronizar.")
             return
         }
@@ -144,25 +161,147 @@ class LoveViewModel @Inject constructor(
 
                     val pId = snapshot.getString("partnerId")
                     val rId = snapshot.getString("relationId")
-                    _relationId.value = rId
-                    _linkingCode.value = snapshot.getString("linkingCode")
+                    val rIds = snapshot.get("relationIds") as? List<String> ?: emptyList()
                     
-                    if (rId != null) {
-                        observeMembers(rId)
-                    } else {
-                        _members.value = emptyList()
-                        membersListener?.remove()
+                    if (rId != null && !rIds.contains(rId)) {
+                        db.collection("users").document(currentUserId)
+                            .update("relationIds", com.google.firebase.firestore.FieldValue.arrayUnion(rId))
                     }
-                    
+
                     // Prioridad al relationId para grupos. Si no existe, usamos el partnerId legacy.
                     // Si no hay ninguno, usamos el UID propio.
-                    _sharedId.value = rId ?: if (pId != null) {
+                    val sId = rId ?: if (pId != null) {
                         listOf(currentUserId, pId).sorted().joinToString("_")
                     } else {
                         currentUserId
                     }
+                    _sharedId.value = sId
+
+                    _relationId.value = rId
+                    
+                    // Construir lista de todos los IDs de relación a monitorear
+                    val allMonitoredIds = rIds.toMutableList()
+                    if (rId != null && !allMonitoredIds.contains(rId)) allMonitoredIds.add(rId)
+                    if (sId != currentUserId && !allMonitoredIds.contains(sId)) allMonitoredIds.add(sId)
+                    
+                    _relationIds.value = allMonitoredIds
+                    
+                    // Escuchar detalles de la relación actual (incluyendo linkingCode por perfil)
+                    observeCurrentRelation(rId, snapshot.getString("linkingCode"))
+
+                    // Escuchar mensajes de TODAS las relaciones
+                    listenToAllQuickMessages(allMonitoredIds)
+
+                    // Cargar nombres de relaciones
+                    observeRelations(allMonitoredIds)
+
+                    // Cargar preguntas específicas si es admin
+                    if (rId == ADMIN_RELATION_ID) {
+                        viewModelScope.launch {
+                            QuestionsRepository.loadQuestions(db, rId)
+                        }
+                    }
+                    
+                    if (rId != null) {
+                        observeMembers(rId)
+                    } else if (pId != null) {
+                        // Soporte para legado (pId)
+                        observeMembers(sId)
+                    } else {
+                        _members.value = emptyList()
+                        membersListener?.remove()
+                    }
                 }
             }
+    }
+
+    private fun observeRelations(rIds: List<String>) {
+        if (rIds.isEmpty()) {
+            _availableRelations.value = emptyMap()
+            relationsListener?.remove()
+            return
+        }
+
+        relationsListener?.remove()
+        relationsListener = db.collection("relations")
+            .whereIn(com.google.firebase.firestore.FieldPath.documentId(), rIds.take(10))
+            .addSnapshotListener { snapshot, _ ->
+                val namesMap = mutableMapOf<String, String>()
+                rIds.forEach { id ->
+                    namesMap[id] = "Relación ${id.take(4)}"
+                }
+                snapshot?.documents?.forEach { doc ->
+                    namesMap[doc.id] = doc.getString("name") ?: "Relación ${doc.id.take(4)}"
+                }
+                _availableRelations.value = namesMap
+            }
+    }
+
+    private fun observeCurrentRelation(rId: String?, userLinkingCode: String?) {
+        currentRelationListener?.remove()
+        if (rId == null) {
+            _linkingCode.value = userLinkingCode
+            return
+        }
+        currentRelationListener = db.collection("relations").document(rId)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot != null && snapshot.exists()) {
+                    // Si el documento de relación tiene un código, ese es el que mostramos.
+                    // Si no tiene, mostramos null (o el del usuario como fallback legacy si aplica)
+                    _linkingCode.value = snapshot.getString("linkingCode")
+                } else {
+                    _linkingCode.value = userLinkingCode
+                }
+            }
+    }
+
+    private fun listenToAllQuickMessages(rIds: List<String>) {
+        // Remover listeners de relaciones que ya no están
+        val toRemove = messagesListeners.keys.filter { !rIds.contains(it) }
+        toRemove.forEach { 
+            messagesListeners[it]?.remove()
+            messagesListeners.remove(it)
+        }
+
+        // Usamos un margen de 1 minuto hacia atrás para evitar perder mensajes por desfase de reloj
+        val startTime = Timestamp(System.currentTimeMillis() / 1000 - 60, 0)
+        
+        rIds.forEach { id ->
+            if (!messagesListeners.containsKey(id)) {
+                Log.d("LoveVM", "Iniciando listener de mensajes para relación: $id")
+                val listener = db.collection("relations").document(id)
+                    .collection("quick_messages")
+                    .whereGreaterThan("timestamp", startTime)
+                    .addSnapshotListener { snapshot, e ->
+                        if (e != null) {
+                            Log.e("LoveVM", "Error en listener de mensajes ($id): ${e.message}")
+                            return@addSnapshotListener
+                        }
+                        
+                        snapshot?.documentChanges?.forEach { change ->
+                            if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                                val doc = change.document
+                                val senderUid = doc.getString("senderUid")
+                                val timestamp = doc.getTimestamp("timestamp")
+                                
+                                // Solo procesar si no lo enviamos nosotros y es realmente nuevo (posterior al inicio del listener real)
+                                if (senderUid != FirebaseAuth.getInstance().currentUser?.uid && 
+                                    timestamp != null && timestamp.seconds >= startTime.seconds) {
+                                    val title = doc.getString("name") ?: ""
+                                    val value = doc.getString("value") ?: ""
+                                    Log.d("LoveVM", "Nuevo mensaje recibido de $id: $title - $value")
+                                    _incomingMessage.value = title to value
+                                }
+                            }
+                        }
+                    }
+                messagesListeners[id] = listener
+            }
+        }
+    }
+
+    fun clearIncomingMessage() {
+        _incomingMessage.value = null
     }
 
     private fun observeMembers(rId: String) {
@@ -182,6 +321,10 @@ class LoveViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         membersListener?.remove()
+        relationsListener?.remove()
+        currentRelationListener?.remove()
+        messagesListeners.values.forEach { it.remove() }
+        messagesListeners.clear()
     }
 
     fun generateLinkingCode() {
@@ -192,33 +335,34 @@ class LoveViewModel @Inject constructor(
             return
         }
         
+        val rId = _relationId.value
+
         viewModelScope.launch {
             try {
                 val batch = db.batch()
                 
-                // Si ya existe un código, lo eliminamos de la colección global
+                // Si ya existe un código activo, lo eliminamos de la colección global
                 _linkingCode.value?.let { oldCode ->
                     batch.delete(db.collection("linking_codes").document(oldCode))
                 }
                 
                 val newCode = (1..16).map { (0..9).random() }.joinToString("")
-                
-                // Determinamos qué ID compartir: 
-                // Si ya estoy en una relación (relationId), comparto ese ID.
-                // Si no, comparto mi propio UID para crear una nueva relación conmigo.
-                val targetRelationId = _relationId.value ?: currentUserId
+                val targetRelationId = rId ?: currentUserId
 
-                // Actualizar usuario con el nuevo código
-                batch.set(db.collection("users").document(currentUserId), mapOf("linkingCode" to newCode), SetOptions.merge())
+                // Actualizar según corresponda: en la relación o en el usuario (legacy)
+                if (rId != null) {
+                    batch.set(db.collection("relations").document(rId), mapOf("linkingCode" to newCode), SetOptions.merge())
+                } else {
+                    batch.set(db.collection("users").document(currentUserId), mapOf("linkingCode" to newCode), SetOptions.merge())
+                }
                 
-                // Guardar en colección global para búsqueda, incluyendo el relationId meta
+                // Guardar en colección global para búsqueda
                 batch.set(db.collection("linking_codes").document(newCode), mapOf(
                     "userId" to currentUserId,
                     "relationId" to targetRelationId
                 ))
                 
                 batch.commit().await()
-                _linkingCode.value = newCode
                 Log.d("Partner", "Linking code generated successfully: $newCode")
             } catch (e: Exception) {
                 Log.e("Partner", "Error generating code", e)
@@ -234,52 +378,111 @@ class LoveViewModel @Inject constructor(
             return
         }
 
+        Log.d("Partner", "Intentando vincular con código: $code")
         viewModelScope.launch {
             try {
                 _isLinking.value = true
                 val result = db.collection("linking_codes").document(code).get().await()
                 
                 if (!result.exists()) {
+                    Log.e("Partner", "El código $code no existe en la colección linking_codes")
                     _syncStatus.value = "Código inválido o expirado"
                     return@launch
                 }
 
                 val creatorUid = result.getString("userId")
                 val targetRelationId = result.getString("relationId")
+                
+                Log.d("Partner", "Código encontrado. Creador: $creatorUid, Relación Objetivo: $targetRelationId")
 
-                if (creatorUid != null && creatorUid != currentUserId && targetRelationId != null) {
+                if (creatorUid == currentUserId) {
+                    Log.e("Partner", "Error: El usuario intenta vincularse con su propio código")
+                    _syncStatus.value = "No puedes vincularte con tu propio código"
+                    return@launch
+                }
+
+                if (creatorUid != null && targetRelationId != null) {
                     val batch = db.batch()
                     
-                    // 1. Me uno a la relación (ya sea un grupo existente o el UID del creador)
-                    batch.set(db.collection("users").document(currentUserId), mapOf("relationId" to targetRelationId), SetOptions.merge())
+                    // 1. Me uno a la relación
+                    batch.set(db.collection("users").document(currentUserId), mapOf(
+                        "relationId" to targetRelationId,
+                        "relationIds" to com.google.firebase.firestore.FieldValue.arrayUnion(targetRelationId)
+                    ), SetOptions.merge())
                     
-                    // 2. Si el creador no tenía relationId aún (era una pareja nueva), se lo asignamos también
-                    batch.set(db.collection("users").document(creatorUid), mapOf("relationId" to targetRelationId), SetOptions.merge())
+                    // 2. Si el creador no tenía relationId aún, se lo asignamos
+                    batch.set(db.collection("users").document(creatorUid), mapOf(
+                        "relationId" to targetRelationId,
+                        "relationIds" to com.google.firebase.firestore.FieldValue.arrayUnion(targetRelationId)
+                    ), SetOptions.merge())
 
-                    // Limpiar código usado (Solo si es el creador quien lo hace o si queremos que sea de un solo uso)
-                    // Para permitir múltiples dispositivos con el mismo código, NO lo borramos aquí.
-                    // Opcionalmente, podemos dejar que expire por tiempo o que el creador lo regenere.
-                    // batch.delete(db.collection("linking_codes").document(code))
-                    
-                    // Solo borramos el linkingCode del creador si queremos que sea de un solo uso.
-                    // batch.set(db.collection("users").document(creatorUid), mapOf("linkingCode" to null), SetOptions.merge())
-                    
-                    // Limpiar mis códigos viejos si tenía
-                    _linkingCode.value?.let { myOldCode ->
-                        batch.delete(db.collection("linking_codes").document(myOldCode))
-                    }
-                    batch.set(db.collection("users").document(currentUserId), mapOf("linkingCode" to null), SetOptions.merge())
+                    // Nota: No borramos el código para permitir que más personas se unan 
+                    // (útil para grupos de amigos o familia). El creador puede regenerarlo si desea.
                     
                     batch.commit().await()
+                    Log.d("Partner", "Vinculación exitosa con relación $targetRelationId")
                     _syncStatus.value = "¡Enlazado con éxito!"
                 } else {
-                    _syncStatus.value = "Código inválido"
+                    Log.e("Partner", "Error: Datos del código incompletos en Firebase")
+                    _syncStatus.value = "Código inválido (datos incompletos)"
                 }
             } catch (e: Exception) {
                 Log.e("Partner", "Error linking with partner", e)
                 _syncStatus.value = "Error: ${e.message}"
             } finally {
                 _isLinking.value = false
+            }
+        }
+    }
+
+    fun switchProfile(newRelationId: String) {
+        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                db.collection("users").document(currentUserId)
+                    .update("relationId", newRelationId).await()
+                _syncStatus.value = "Perfil cambiado"
+            } catch (e: Exception) {
+                Log.e("Profile", "Error switching profile", e)
+                _syncStatus.value = "Error al cambiar perfil"
+            }
+        }
+    }
+
+    fun createProfile(name: String) {
+        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val newRelationId = java.util.UUID.randomUUID().toString()
+                val batch = db.batch()
+                
+                // Crear documento de relación
+                batch.set(db.collection("relations").document(newRelationId), mapOf("name" to name))
+                
+                // Actualizar usuario
+                batch.set(db.collection("users").document(currentUserId), mapOf(
+                    "relationId" to newRelationId,
+                    "relationIds" to com.google.firebase.firestore.FieldValue.arrayUnion(newRelationId)
+                ), SetOptions.merge())
+                
+                batch.commit().await()
+                _syncStatus.value = "Perfil creado: $name"
+            } catch (e: Exception) {
+                Log.e("Profile", "Error creating profile", e)
+                _syncStatus.value = "Error al crear perfil"
+            }
+        }
+    }
+
+    fun renameRelation(relationId: String, newName: String) {
+        viewModelScope.launch {
+            try {
+                db.collection("relations").document(relationId)
+                    .set(mapOf("name" to newName), SetOptions.merge()).await()
+                _syncStatus.value = "Relación renombrada"
+            } catch (e: Exception) {
+                Log.e("Profile", "Error renaming relation", e)
+                _syncStatus.value = "Error al renombrar"
             }
         }
     }
@@ -291,14 +494,15 @@ class LoveViewModel @Inject constructor(
             return
         }
         
+        val rId = _relationId.value
+
         viewModelScope.launch {
             try {
-                // Al salir de una relación de grupo, simplemente borramos nuestro relationId.
-                // Nota: Esto no borra la relación para los demás, solo para ti.
                 val batch = db.batch()
                 batch.set(db.collection("users").document(currentUserId), mapOf(
                     "relationId" to null,
-                    "partnerId" to null // Limpiamos también el legacy por si acaso
+                    "relationIds" to if (rId != null) com.google.firebase.firestore.FieldValue.arrayRemove(rId) else emptyList<String>(),
+                    "partnerId" to null
                 ), SetOptions.merge())
                 
                 batch.commit().await()

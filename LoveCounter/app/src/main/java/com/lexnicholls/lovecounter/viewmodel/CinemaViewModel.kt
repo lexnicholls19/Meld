@@ -71,13 +71,14 @@ class CinemaViewModel @Inject constructor(
                         .onSuccess { 
                             val updatedMovie = it.copy(
                                 addedBy = movie?.addedBy ?: "", 
-                                category = movie?.category ?: "", // Preservar la categoría (ej: k drama, crunchyroll)
+                                category = movie?.category ?: "", // Preservar la categoría
                                 language = userLang,
                                 watchState = movie?.watchState ?: com.lexnicholls.lovecounter.domain.model.WatchState.IN_WATCHLIST,
-                                watchedDate = movie?.watchedDate
+                                watchedDate = movie?.watchedDate,
+                                timestamp = movie?.timestamp ?: System.currentTimeMillis() // Preservar el timestamp original
                             )
                             _selectedMovie.value = updatedMovie
-                            // Actualizar Firestore con la nueva traducción y plataformas, manteniendo el estado de visto
+                            // Actualizar Firestore con la nueva traducción y plataformas, manteniendo el estado de visto y el orden
                             db.collection("users").document(userId).collection("movies").document(movieId).set(updatedMovie)
                         }
                         .onFailure { _error.value = it.message }
@@ -158,5 +159,16 @@ class CinemaViewModel @Inject constructor(
                 _error.value = e.message
             }
         }
+    }
+
+    private val _randomTrigger = mutableStateOf(0)
+    val randomTrigger: State<Int> = _randomTrigger
+
+    fun triggerRandom() {
+        _randomTrigger.value += 1
+    }
+
+    fun clearRandomTrigger() {
+        _randomTrigger.value = 0
     }
 }

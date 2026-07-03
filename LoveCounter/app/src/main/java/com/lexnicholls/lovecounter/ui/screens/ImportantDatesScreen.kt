@@ -254,30 +254,53 @@ fun ImportantDatesScreen(
             dates.sortedBy { calculateDaysRemaining(it.date) }
         }
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(sortedDates, key = { it.id }) { item ->
-                val isSelected = selectedIds.contains(item.id)
-                DateRow(
-                    item = item,
-                    isSelected = isSelected,
-                    onDelete = {
-                        db.collection("users").document(userId).collection("important_dates")
-                            .document(item.id).delete()
-                    },
-                    onClick = {
-                        if (isSelectionMode) {
-                            if (isSelected) selectedIds.remove(item.id) else selectedIds.add(item.id)
-                        } else {
-                            editingItem = item
+        if (sortedDates.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = strings.noItemsYet,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = strings.importantDatesEmpty,
+                        color = Color.Gray.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(sortedDates, key = { it.id }) { item ->
+                    val isSelected = selectedIds.contains(item.id)
+                    DateRow(
+                        item = item,
+                        isSelected = isSelected,
+                        onDelete = {
+                            db.collection("users").document(userId).collection("important_dates")
+                                .document(item.id).delete()
+                        },
+                        onClick = {
+                            if (isSelectionMode) {
+                                if (isSelected) selectedIds.remove(item.id) else selectedIds.add(item.id)
+                            } else {
+                                editingItem = item
+                            }
+                        },
+                        onLongClick = {
+                            if (!isSelectionMode) selectedIds.add(item.id)
                         }
-                    },
-                    onLongClick = {
-                        if (!isSelectionMode) selectedIds.add(item.id)
-                    }
-                )
+                    )
+                }
             }
         }
     }

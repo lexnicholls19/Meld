@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.lexnicholls.lovecounter.viewmodel.LoveViewModel
 import com.lexnicholls.lovecounter.util.t
@@ -74,7 +75,7 @@ fun LoveScreen(
 
     val startDate = remember(relationshipDate) {
         relationshipDate?.let {
-            java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime()
+            java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDateTime()
         }
     }
     
@@ -393,6 +394,11 @@ fun sendInterpretedNotification(context: Context, title: String, message: String
     val finalSenderName = if (senderName.isNotBlank()) senderName else nameFromPrefs
     
     val db = FirebaseFirestore.getInstance()
+    val auth = FirebaseAuth.getInstance()
+    val currentUserUid = auth.currentUser?.uid ?: ""
+    
+    // Obtenemos el sharedId (relationId) de los perfiles de usuario si es necesario, 
+    // pero para simplicidad y rapidez lo incluimos en el payload si el backend lo requiere para el topic.
     val notification = hashMapOf(
         "name" to title,
         "value" to message,
@@ -400,13 +406,35 @@ fun sendInterpretedNotification(context: Context, title: String, message: String
         "senderName" to finalSenderName,
         "userName" to finalSenderName,
         "senderId" to deviceId,
-        "deviceId" to deviceId
+        "deviceId" to deviceId,
+        "senderUid" to currentUserUid,
+        "targetTopic" to "relation_" // El backend debería completar esto o podemos intentar obtenerlo aquí
     )
-    db.collection("quick_messages").add(notification)
-        .addOnSuccessListener {
-            Toast.makeText(context, strings.drawingSent, Toast.LENGTH_SHORT).show()
-        }
-        .addOnFailureListener {
-            Toast.makeText(context, strings.drawingError, Toast.LENGTH_SHORT).show()
+    
+    // Intentamos obtener el relationId del usuario actual para enviarlo
+    db.collection("users").document(currentUserUid).get()
+        .addOnSuccessListener { snapshot ->
+            val relationId = snapshot.getString("relationId")
+            val pId = snapshot.getString("partnerId")
+            
+            val finalSharedId = relationId ?: if (pId != null) {
+                listOf(currentUserUid, pId).sorted().joinToString("_")
+            } else {
+                currentUserUid
+            }
+            
+            notification["relationId"] = finalSharedId
+            notification["targetTopic"] = "relation_$finalSharedId"
+
+            Log.d("Notification", "Enviando mensaje rápido a relación: $finalSharedId")
+            db.collection("relations").document(finalSharedId).collection("quick_messages").add(notification)
+                .addOnSuccessListener {
+                    Log.d("Notification", "Mensaje enviado con éxito")
+                    Toast.makeText(context, strings.quickMessageSent, Toast.LENGTH_SHORT).show()
+                }
+                .addOnFailureListener { e ->
+                    Log.e("Notification", "Error al enviar mensaje: ${e.message}")
+                    Toast.makeText(context, strings.drawingError, Toast.LENGTH_SHORT).show()
+                }
         }
 }

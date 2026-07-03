@@ -5,10 +5,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.google.firebase.auth.FirebaseAuth
 import com.lexnicholls.lovecounter.MainActivity
 import com.lexnicholls.lovecounter.R
 
@@ -42,20 +44,27 @@ class LoveMessagingService : FirebaseMessagingService() {
 
         val senderName = (data["senderName"] ?: data["userName"] ?: data["sender_name"] ?: data["user"])?.trim()
         val senderId = (data["senderId"] ?: data["deviceId"] ?: data["sender_id"] ?: data["uid"])?.trim()
+        val senderUid = data["senderUid"]?.trim()
+        
+        val localUid = FirebaseAuth.getInstance().currentUser?.uid
         
         Log.d("LoveFCM", "Comparando:")
         Log.d("LoveFCM", "  > SenderName: '$senderName' vs LocalUser: '$localUserName'")
         Log.d("LoveFCM", "  > SenderId: '$senderId' vs LocalId: '$localDeviceId'")
+        Log.d("LoveFCM", "  > SenderUid: '$senderUid' vs LocalUid: '$localUid'")
 
-        // 1. Filter: Ignore our own actions (by Name or Device ID)
+        // 1. Filter: Ignore our own actions (by Name, Device ID or UID)
         val isOwnNotificationByName = !senderName.isNullOrBlank() && !localUserName.isNullOrBlank() && 
                 senderName.equals(localUserName, ignoreCase = true)
         
         val isOwnNotificationById = !senderId.isNullOrBlank() && !localDeviceId.isNullOrBlank() && 
                 senderId.equals(localDeviceId, ignoreCase = true)
+        
+        val isOwnNotificationByUid = !senderUid.isNullOrBlank() && !localUid.isNullOrBlank() &&
+                senderUid == localUid
 
-        if (isOwnNotificationByName || isOwnNotificationById) {
-            Log.d("LoveFCM", "IGNORANDO: Es una notificación propia (Match Nombre: $isOwnNotificationByName, Match ID: $isOwnNotificationById)")
+        if (isOwnNotificationByName || isOwnNotificationById || isOwnNotificationByUid) {
+            Log.d("LoveFCM", "IGNORANDO: Es una notificación propia (Match Nombre: $isOwnNotificationByName, Match ID: $isOwnNotificationById, Match UID: $isOwnNotificationByUid)")
             return
         }
 
@@ -94,8 +103,11 @@ class LoveMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val largeIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_heart) // Using a heart icon
+            .setLargeIcon(largeIcon)
             .setContentTitle(title)
             .setContentText(message)
             .setAutoCancel(true)

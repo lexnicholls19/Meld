@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.Timestamp
@@ -95,36 +96,45 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
     }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text(strings.drawing, fontWeight = FontWeight.Bold, color = LovePink) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { 
-                            loadDrawingHistory(db, userId) { 
-                                drawingsHistory = it
-                                showHistory = true 
-                            }
-                        }
-                    ) {
-                        Icon(Icons.Default.History, contentDescription = strings.todayDrawings)
-                    }
-                }
-            )
-        }
+        /* Removing topBar to reduce top spacing as requested */
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Custom Header
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                }
+                
+                Text(
+                    strings.drawing, 
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold, 
+                    color = LovePink,
+                    textAlign = TextAlign.Center
+                )
+                
+                IconButton(
+                    onClick = { 
+                        loadDrawingHistory(db, userId) { 
+                            drawingsHistory = it
+                            showHistory = true 
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.History, contentDescription = strings.todayDrawings)
+                }
+            }
+
             // Background Color Picker
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
                 Text(strings.backgroundColor, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))

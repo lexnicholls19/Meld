@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.RotateRight
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -58,6 +60,8 @@ fun SettingsScreen(
     currentLanguage: String,
     currentVisibleCategories: Set<String>,
     currentRelationshipDate: Long?,
+    currentBgColor1: String,
+    currentBgColor2: String,
     onThemeChange: (ThemeMode) -> Unit,
     onNameChange: (String) -> Unit,
     onMainTitleChange: (String) -> Unit,
@@ -68,7 +72,8 @@ fun SettingsScreen(
     onAutoRotateIntervalChange: (Int) -> Unit,
     onCurrencyChange: (String) -> Unit,
     onRelationshipDateChange: (Long?) -> Unit,
-    onFabMessagesChange: (String, String) -> Unit,
+    onFabMessagesChange: (String, String, String, String) -> Unit,
+    onBackgroundColorsChange: (String, String) -> Unit,
     onLogout: () -> Unit,
     onSyncQuestions: () -> Unit = {}
 ) {
@@ -83,13 +88,29 @@ fun SettingsScreen(
     val isLinking by loveViewModel.isLinking
     val currentUserProfile by loveViewModel.currentUserProfile
 
-    var tempName by remember { mutableStateOf(currentName) }
-    var tempTitle by remember { mutableStateOf(currentMainTitle) }
-    var tempFab1 by remember { 
-        mutableStateOf(sharedPrefs.getString("fab_message_1", "${strings.missYou} 💛") ?: "${strings.missYou} 💛") 
+    val availableRelations by loveViewModel.availableRelations
+    var showSwitchProfileDialog by remember { mutableStateOf(false) }
+    var showRenameRelationDialog by remember { mutableStateOf(false) }
+    var showCreateProfileDialog by remember { mutableStateOf(false) }
+    var newProfileName by remember { mutableStateOf("") }
+    var renameValue by remember { mutableStateOf("") }
+
+    val sharedId by loveViewModel.sharedId
+    val prefix = remember(sharedId) { if (sharedId != null) "rel_${sharedId}_" else "" }
+
+    var tempName by remember(currentName) { mutableStateOf(currentName) }
+    var tempTitle by remember(currentMainTitle) { mutableStateOf(currentMainTitle) }
+    var tempFab1 by remember(prefix) { 
+        mutableStateOf(sharedPrefs.getString("${prefix}fab_message_1", "") ?: "") 
     }
-    var tempFab2 by remember { 
-        mutableStateOf(sharedPrefs.getString("fab_message_2", "${strings.loveYou} ✨") ?: "${strings.loveYou} ✨") 
+    var tempFab2 by remember(prefix) { 
+        mutableStateOf(sharedPrefs.getString("${prefix}fab_message_2", "") ?: "") 
+    }
+    var tempFab1Icon by remember(prefix) { 
+        mutableStateOf(sharedPrefs.getString("${prefix}fab_icon_1", "") ?: "") 
+    }
+    var tempFab2Icon by remember(prefix) { 
+        mutableStateOf(sharedPrefs.getString("${prefix}fab_icon_2", "") ?: "")
     }
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var showWidgetDialog by remember { mutableStateOf(false) }
@@ -179,6 +200,17 @@ fun SettingsScreen(
                     expanded = showProfileMenu,
                     onDismissRequest = { showProfileMenu = false }
                 ) {
+                    val userEmail = FirebaseAuth.getInstance().currentUser?.email
+                    if (!userEmail.isNullOrBlank()) {
+                        Text(
+                            text = userEmail,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LovePink
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    }
+
                     DropdownMenuItem(
                         text = { Text(strings.changeProfilePic) },
                         leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null) },
@@ -192,8 +224,7 @@ fun SettingsScreen(
                         leadingIcon = { Icon(Icons.Default.SwitchAccount, contentDescription = null) },
                         onClick = {
                             showProfileMenu = false
-                            // Add logic here if needed
-                            Toast.makeText(context, strings.comingSoon, Toast.LENGTH_SHORT).show()
+                            showSwitchProfileDialog = true
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -212,6 +243,21 @@ fun SettingsScreen(
 
         // --- SECCIÓN: PAREJA Y ENLACE ---
         SettingsGroup(title = strings.relation) {
+            val relationName = relationId?.let { availableRelations[it] } ?: strings.relation
+            SettingsInputRow(
+                label = strings.relationName,
+                value = relationName,
+                onValueChange = { /* Solo vista previa */ },
+                onSave = { 
+                    relationId?.let { 
+                        renameValue = availableRelations[it] ?: ""
+                        showRenameRelationDialog = true 
+                    }
+                },
+                icon = Icons.AutoMirrored.Filled.Label,
+                placeholder = strings.relation
+            )
+
             if (relationId != null) {
                 SettingsClickableRow(
                     label = strings.relationStatus,
@@ -224,7 +270,8 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(strings.unlinkPartner)
+                    val isAlone = members.size <= 1
+                    Text(if (isAlone) strings.deleteProfile else strings.unlinkPartner)
                 }
             } else {
                 SettingsClickableRow(
@@ -254,13 +301,14 @@ fun SettingsScreen(
                         Text(strings.generateAnotherCode, fontSize = 12.sp)
                     }
                 }
-                SettingsClickableRow(
-                    label = strings.haveCode,
-                    value = strings.enterPartnerCode,
-                    icon = Icons.Default.QrCodeScanner,
-                    onClick = { showLinkDialog = true }
-                )
             }
+            
+            SettingsClickableRow(
+                label = strings.haveCode,
+                value = strings.enterPartnerCode,
+                icon = Icons.Default.QrCodeScanner,
+                onClick = { showLinkDialog = true }
+            )
         }
 
         // --- SECCIÓN: PERFIL Y PERSONALIZACIÓN ---
@@ -287,31 +335,75 @@ fun SettingsScreen(
             )
 
             // FAB Actions
-            SettingsInputRow(
-                label = strings.quickAction1,
-                value = tempFab1,
-                onValueChange = { tempFab1 = it },
-                onSave = { 
-                    sharedPrefs.edit().putString("fab_message_1", tempFab1).apply()
-                    onFabMessagesChange(tempFab1, tempFab2)
-                },
-                icon = Icons.Default.FavoriteBorder
-            )
-            SettingsInputRow(
-                label = strings.quickAction2,
-                value = tempFab2,
-                onValueChange = { tempFab2 = it },
-                onSave = { 
-                    sharedPrefs.edit().putString("fab_message_2", tempFab2).apply()
-                    onFabMessagesChange(tempFab1, tempFab2)
-                },
-                icon = Icons.Default.Favorite
-            )
+            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.width(40.dp), contentAlignment = Alignment.Center) {
+                    BasicTextField(
+                        value = tempFab1Icon,
+                        onValueChange = { if (it.length <= 4) tempFab1Icon = it },
+                        textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = strings.quickAction1, fontSize = 14.sp, color = Color.Gray)
+                    BasicTextField(
+                        value = tempFab1,
+                        onValueChange = { tempFab1 = it },
+                        textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                IconButton(onClick = { 
+                    sharedPrefs.edit().apply {
+                        putString("${prefix}fab_message_1", tempFab1)
+                        putString("${prefix}fab_icon_1", tempFab1Icon)
+                        apply()
+                    }
+                    onFabMessagesChange(tempFab1, tempFab2, tempFab1Icon, tempFab2Icon)
+                }) {
+                    Icon(Icons.Default.Check, contentDescription = "Guardar", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.width(40.dp), contentAlignment = Alignment.Center) {
+                    BasicTextField(
+                        value = tempFab2Icon,
+                        onValueChange = { if (it.length <= 4) tempFab2Icon = it },
+                        textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = strings.quickAction2, fontSize = 14.sp, color = Color.Gray)
+                    BasicTextField(
+                        value = tempFab2,
+                        onValueChange = { tempFab2 = it },
+                        textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                IconButton(onClick = { 
+                    sharedPrefs.edit().apply {
+                        putString("${prefix}fab_message_2", tempFab2)
+                        putString("${prefix}fab_icon_2", tempFab2Icon)
+                        apply()
+                    }
+                    onFabMessagesChange(tempFab1, tempFab2, tempFab1Icon, tempFab2Icon)
+                }) {
+                    Icon(Icons.Default.Check, contentDescription = "Guardar", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
 
             // Relationship Start Date
             var showDatePicker by remember { mutableStateOf(false) }
-            val datePickerState = rememberDatePickerState(initialSelectedDateMillis = currentRelationshipDate)
-            
+            val datePickerState = key(sharedId) {
+                rememberDatePickerState(
+                    initialSelectedDateMillis = currentRelationshipDate,
+                    yearRange = 1900..2100
+                )
+            }
+
             if (showDatePicker) {
                 DatePickerDialog(
                     onDismissRequest = { showDatePicker = false },
@@ -345,6 +437,31 @@ fun SettingsScreen(
                 icon = Icons.Default.CalendarToday,
                 onClick = { showDatePicker = true },
                 onDelete = { onRelationshipDateChange(null) }
+            )
+
+            // Background Colors
+            var showColorPickerDialog by remember { mutableStateOf(false) }
+
+            if (showColorPickerDialog) {
+                com.lexnicholls.lovecounter.ui.components.ColorPickerDialog(
+                    initialColor1 = Color(android.graphics.Color.parseColor(currentBgColor1)),
+                    initialColor2 = Color(android.graphics.Color.parseColor(currentBgColor2)),
+                    onColorsSelected = { c1, c2 ->
+                        onBackgroundColorsChange(
+                            String.format("#%08X", c1.toArgb()),
+                            String.format("#%08X", c2.toArgb())
+                        )
+                        showColorPickerDialog = false
+                    },
+                    onDismiss = { showColorPickerDialog = false }
+                )
+            }
+
+            SettingsClickableRow(
+                label = strings.backgroundColors,
+                value = strings.customizeBackground,
+                icon = Icons.Default.Palette,
+                onClick = { showColorPickerDialog = true }
             )
         }
 
@@ -483,6 +600,127 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(48.dp))
 
         // --- DIÁLOGOS ---
+        if (showSwitchProfileDialog) {
+            AlertDialog(
+                onDismissRequest = { showSwitchProfileDialog = false },
+                title = { Text(strings.selectProfile) },
+                text = {
+                    Column {
+                        availableRelations.forEach { (id, name) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        loveViewModel.switchProfile(id)
+                                        showSwitchProfileDialog = false
+                                    }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(selected = id == relationId, onClick = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(name)
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            TextButton(
+                                onClick = { 
+                                    showSwitchProfileDialog = false
+                                    showCreateProfileDialog = true 
+                                }
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(strings.createProfile, fontSize = 12.sp)
+                            }
+                            TextButton(
+                                onClick = { 
+                                    showSwitchProfileDialog = false
+                                    showLinkDialog = true 
+                                }
+                            ) {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(strings.joinWithCode, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showSwitchProfileDialog = false }) {
+                        Text(strings.close)
+                    }
+                }
+            )
+        }
+
+        if (showCreateProfileDialog) {
+            AlertDialog(
+                onDismissRequest = { showCreateProfileDialog = false },
+                title = { Text(strings.createProfile) },
+                text = {
+                    Column {
+                        Text(strings.profileName, fontSize = 14.sp, color = Color.Gray)
+                        OutlinedTextField(
+                            value = newProfileName,
+                            onValueChange = { newProfileName = it },
+                            placeholder = { Text("Ej: Familia, Amigos...") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (newProfileName.isNotBlank()) {
+                            loveViewModel.createProfile(newProfileName)
+                            newProfileName = ""
+                            showCreateProfileDialog = false
+                        }
+                    }) {
+                        Text(strings.confirm)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCreateProfileDialog = false }) {
+                        Text(strings.cancel)
+                    }
+                }
+            )
+        }
+
+        if (showRenameRelationDialog) {
+            AlertDialog(
+                onDismissRequest = { showRenameRelationDialog = false },
+                title = { Text(strings.renameRelation) },
+                text = {
+                    Column {
+                        Text(strings.relationName, fontSize = 14.sp, color = Color.Gray)
+                        OutlinedTextField(
+                            value = renameValue,
+                            onValueChange = { renameValue = it },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (renameValue.isNotBlank() && relationId != null) {
+                            loveViewModel.renameRelation(relationId!!, renameValue)
+                            showRenameRelationDialog = false
+                        }
+                    }) {
+                        Text(strings.save)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRenameRelationDialog = false }) {
+                        Text(strings.cancel)
+                    }
+                }
+            )
+        }
+
         if (showRelationDetailsDialog) {
             AlertDialog(
                 onDismissRequest = { showRelationDetailsDialog = false },
@@ -505,25 +743,46 @@ fun SettingsScreen(
                         
                         Text(strings.linkingCodeLabel, fontWeight = FontWeight.Bold)
                         val codeToShow = linkingCode ?: strings.noCodeGenerated
-                        val formatted = codeToShow.chunked(4).joinToString("-")
+                        val formatted = if (linkingCode != null) {
+                            codeToShow.chunked(4).joinToString("-")
+                        } else {
+                            codeToShow
+                        }
                         
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(formatted, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                            IconButton(onClick = {
+                            Text(
+                                text = formatted,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (linkingCode != null) {
-                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    val clip = android.content.ClipData.newPlainText("Código de Enlace", linkingCode)
-                                    clipboard.setPrimaryClip(clip)
-                                    Toast.makeText(context, strings.codeCopied, Toast.LENGTH_SHORT).show()
-                                } else {
-                                    loveViewModel.generateLinkingCode()
+                                    IconButton(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            val clip = android.content.ClipData.newPlainText("Código de Enlace", linkingCode)
+                                            clipboard.setPrimaryClip(clip)
+                                            Toast.makeText(context, strings.codeCopied, Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copiar", modifier = Modifier.size(18.dp))
+                                    }
                                 }
-                            }) {
-                                Icon(if (linkingCode != null) Icons.Default.ContentCopy else Icons.Default.Refresh, contentDescription = "Acción")
+                                IconButton(
+                                    onClick = {
+                                        loveViewModel.generateLinkingCode()
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = "Regenerar", modifier = Modifier.size(18.dp))
+                                }
                             }
                         }
                         Text(strings.shareCodeDesc, fontSize = 12.sp, color = Color.Gray)

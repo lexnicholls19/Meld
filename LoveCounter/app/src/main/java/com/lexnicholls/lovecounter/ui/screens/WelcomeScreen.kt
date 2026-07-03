@@ -46,7 +46,7 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WelcomeScreen(
-    onContinue: (name: String, title: String, categories: Set<String>, date: Long?, profileUri: Uri?, currency: String, fab1: String, fab2: String) -> Unit,
+    onContinue: (name: String, title: String, categories: Set<String>, date: Long?, profileUri: Uri?, currency: String, fab1: String, fab2: String, fab1Icon: String, fab2Icon: String) -> Unit,
     viewModel: LoveViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -57,8 +57,10 @@ fun WelcomeScreen(
     var relationshipDate by remember { mutableStateOf<Long?>(null) }
     var profilePicUri by remember { mutableStateOf<Uri?>(null) }
     var localCurrency by remember { mutableStateOf("COP") }
-    var fab1 by remember { mutableStateOf("${strings.missYou} 💛") }
-    var fab2 by remember { mutableStateOf("${strings.loveYou} ✨") }
+    var fab1 by remember { mutableStateOf("") }
+    var fab2 by remember { mutableStateOf("") }
+    var fab1Icon by remember { mutableStateOf("") }
+    var fab2Icon by remember { mutableStateOf("") }
     
     val allCategories = listOf(
         "reminders" to strings.reminders,
@@ -163,19 +165,43 @@ fun WelcomeScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 
-                LoveTextField(
-                    value = fab1,
-                    onValueChange = { fab1 = it },
-                    label = strings.quickAction1,
-                    placeholder = "${strings.missYou} 💛"
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.width(70.dp)) {
+                        LoveTextField(
+                            value = fab1Icon,
+                            onValueChange = { if (it.length <= 4) fab1Icon = it },
+                            label = "Icon",
+                            placeholder = ""
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        LoveTextField(
+                            value = fab1,
+                            onValueChange = { fab1 = it },
+                            label = strings.quickAction1,
+                            placeholder = ""
+                        )
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
-                LoveTextField(
-                    value = fab2,
-                    onValueChange = { fab2 = it },
-                    label = strings.quickAction2,
-                    placeholder = "${strings.loveYou} ✨"
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.width(70.dp)) {
+                        LoveTextField(
+                            value = fab2Icon,
+                            onValueChange = { if (it.length <= 4) fab2Icon = it },
+                            label = "Icon",
+                            placeholder = ""
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f)) {
+                        LoveTextField(
+                            value = fab2,
+                            onValueChange = { fab2 = it },
+                            label = strings.quickAction2,
+                            placeholder = ""
+                        )
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
 
                 var expandedCurrency by remember { mutableStateOf(false) }
@@ -305,7 +331,7 @@ fun WelcomeScreen(
                         ProfileImageManager.saveToInternalStorage(context, uri)
                         scope.launch { ProfileImageManager.uploadToCloud(context, uri) }
                     }
-                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2)
+                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -393,7 +419,7 @@ fun WelcomeScreen(
                         ProfileImageManager.saveToInternalStorage(context, uri)
                         scope.launch { ProfileImageManager.uploadToCloud(context, uri) }
                     }
-                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2)
+                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon)
                 }
             ) {
                 Text(strings.skipInitialConfigConfirm)

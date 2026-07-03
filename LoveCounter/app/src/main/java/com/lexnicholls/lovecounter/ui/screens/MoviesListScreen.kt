@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.google.firebase.firestore.FirebaseFirestore
 import com.lexnicholls.lovecounter.domain.model.MeldMovie
@@ -41,10 +43,16 @@ import com.lexnicholls.lovecounter.ui.components.LoveAlertDialog
 import com.lexnicholls.lovecounter.ui.components.LoveTextField
 import com.lexnicholls.lovecounter.util.t
 import com.lexnicholls.lovecounter.viewmodel.CinemaViewModel
+import kotlinx.coroutines.delay
 
 enum class DisplayMode {
     COMPACT, COMFORTABLE, COVER_ONLY, LIST
 }
+
+data class MovieCategoryConfig(
+    val name: String = "",
+    val type: String = "both" // "movie", "tv", "both"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,12 +65,15 @@ fun MoviesListScreen(
     onDismissDeleteDialog: () -> Unit,
     onMovieClick: (id: String, type: String) -> Unit,
     onSelectionChange: (Boolean) -> Unit,
-    viewModel: CinemaViewModel = hiltViewModel()
+    viewModel: CinemaViewModel = hiltViewModel(LocalContext.current as ComponentActivity)
 ) {
     val db = FirebaseFirestore.getInstance()
     val strings = t()
     var watchlist by remember { mutableStateOf<List<MeldMovie>>(emptyList()) }
-    var tabs by remember { mutableStateOf(listOf(strings.films, strings.series)) }
+    var tabs by remember { mutableStateOf(listOf(
+        MovieCategoryConfig(strings.films, "movie"),
+        MovieCategoryConfig(strings.series, "tv")
+    )) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showSettingsSheet by remember { mutableStateOf(false) }
 
@@ -74,6 +85,20 @@ fun MoviesListScreen(
     val isSelectionMode by remember { derivedStateOf { selectedIds.isNotEmpty() } }
     
     val pagerState = rememberPagerState(initialPage = selectedTab, pageCount = { tabs.size })
+
+    val randomTrigger by viewModel.randomTrigger
+    LaunchedEffect(randomTrigger) {
+        if (randomTrigger > 0) {
+            delay(500) // Pequeña espera para la animación del dado
+            val currentCategoryPage = tabs[selectedTab].name
+            val filteredList = watchlist.filter { it.category == currentCategoryPage }
+            if (filteredList.isNotEmpty()) {
+                val randomMovie = filteredList.random()
+                viewModel.clearRandomTrigger() // Limpiar el trigger antes de navegar
+                onMovieClick(randomMovie.id, randomMovie.mediaType)
+            }
+        }
+    }
 
     LaunchedEffect(isSelectionMode) {
         onSelectionChange(isSelectionMode)
@@ -107,9 +132,25 @@ fun MoviesListScreen(
         val categoriesRegistration = categoriesDoc.addSnapshotListener { snapshot, e ->
             if (e != null) return@addSnapshotListener
             if (snapshot != null && snapshot.exists()) {
-                val list = snapshot["list"] as? List<String>
+                val list = snapshot["list"] as? List<Map<String, Any>>
                 if (!list.isNullOrEmpty()) {
-                    tabs = list
+                    tabs = list.map { 
+                        MovieCategoryConfig(
+                            name = it["name"] as? String ?: "",
+                            type = it["type"] as? String ?: "both"
+                        )
+                    }
+                } else {
+                    // Legacy migration: maybe it's still a List<String>
+                    val legacyList = snapshot["list"] as? List<String>
+                    if (!legacyList.isNullOrEmpty()) {
+                        tabs = legacyList.map { 
+                            MovieCategoryConfig(
+                                name = it,
+                                type = if (it == strings.films) "movie" else if (it == strings.series) "tv" else "both"
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -120,9 +161,9 @@ fun MoviesListScreen(
         }
     }
 
-    val currentCategory = if (selectedTab < tabs.size) tabs[selectedTab] else ""
+    val currentCategory = if (selectedTab < tabs.size) tabs[selectedTab] else MovieCategoryConfig()
     var searchMediaType by remember(selectedTab) { 
-        mutableStateOf(if (currentCategory == strings.series) "tv" else "movie")
+        mutableStateOf(if (currentCategory.type == "both") "movie" else currentCategory.type)
     }
 
     if (showAddDialog) {
@@ -153,27 +194,29 @@ fun MoviesListScreen(
                     placeholder = "Search..."
                 )
                 
-                Spacer(Modifier.height(8.dp))
+                if (currentCategory.type == "both") {
+                    Spacer(Modifier.height(8.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(strings.type + ": ", fontSize = 12.sp, color = Color.Gray)
-                    FilterChip(
-                        selected = searchMediaType == "movie",
-                        onClick = { 
-                            searchMediaType = "movie"
-                            if (searchQuery.isNotBlank()) viewModel.searchMovies(searchQuery, "movie")
-                        },
-                        label = { Text(strings.films) }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    FilterChip(
-                        selected = searchMediaType == "tv",
-                        onClick = { 
-                            searchMediaType = "tv"
-                            if (searchQuery.isNotBlank()) viewModel.searchMovies(searchQuery, "tv")
-                        },
-                        label = { Text(strings.series) }
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(strings.type + ": ", fontSize = 12.sp, color = Color.Gray)
+                        FilterChip(
+                            selected = searchMediaType == "movie",
+                            onClick = { 
+                                searchMediaType = "movie"
+                                if (searchQuery.isNotBlank()) viewModel.searchMovies(searchQuery, "movie")
+                            },
+                            label = { Text(strings.films) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        FilterChip(
+                            selected = searchMediaType == "tv",
+                            onClick = { 
+                                searchMediaType = "tv"
+                                if (searchQuery.isNotBlank()) viewModel.searchMovies(searchQuery, "tv")
+                            },
+                            label = { Text(strings.series) }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -187,7 +230,7 @@ fun MoviesListScreen(
                             MovieSearchRow(
                                 movie = movie,
                                 onAdd = {
-                                    viewModel.addMovieToWatchlist(userId, movie.copy(category = currentCategory), userName)
+                                    viewModel.addMovieToWatchlist(userId, movie.copy(category = currentCategory.name), userName)
                                     viewModel.clearResults()
                                     onDismissDialog()
                                 }
@@ -227,7 +270,7 @@ fun MoviesListScreen(
                     tabs = newTabs
                     db.collection("users").document(userId).collection("settings")
                         .document("movie_categories")
-                        .set(mapOf("list" to newTabs))
+                        .set(mapOf("list" to newTabs.map { mapOf("name" to it.name, "type" to it.type) }))
                 },
                 onCategoryRename = { oldName, newName ->
                     val batch = db.batch()
@@ -271,7 +314,7 @@ fun MoviesListScreen(
                 Tab(
                     selected = selectedTab == index,
                     onClick = { selectedTab = index },
-                    text = { Text(tabTitle) }
+                    text = { Text(tabTitle.name) }
                 )
             }
         }
@@ -284,17 +327,29 @@ fun MoviesListScreen(
             pageSpacing = 16.dp,
             verticalAlignment = Alignment.Top
         ) { pageIndex ->
-            val currentCategoryPage = tabs[pageIndex]
+            val currentCategoryPage = tabs[pageIndex].name
             val filteredList = watchlist.filter { it.category == currentCategoryPage }
 
             if (filteredList.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        text = strings.noItemsYet, 
-                        color = Color.Gray, 
-                        modifier = Modifier.fillMaxWidth(), 
+                        text = strings.noItemsYet,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = strings.moviesEmpty,
+                        color = Color.Gray.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
                 }
             } else {
                 if (displayMode == DisplayMode.LIST) {
@@ -354,8 +409,8 @@ fun MoviesListScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CinemaSettingsContent(
-    tabs: List<String>,
-    onTabsChange: (List<String>) -> Unit,
+    tabs: List<MovieCategoryConfig>,
+    onTabsChange: (List<MovieCategoryConfig>) -> Unit,
     onCategoryRename: (String, String) -> Unit,
     displayMode: DisplayMode,
     onDisplayModeChange: (DisplayMode) -> Unit,
@@ -430,104 +485,165 @@ fun DisplayModeChip(mode: DisplayMode, label: String, isSelected: Boolean, onCli
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CategoryManagementList(
-    tabs: List<String>,
-    onTabsChange: (List<String>) -> Unit,
+    tabs: List<MovieCategoryConfig>,
+    onTabsChange: (List<MovieCategoryConfig>) -> Unit,
     onCategoryRename: (String, String) -> Unit
 ) {
     val strings = t()
     var newCategoryName by remember { mutableStateOf("") }
+    var newCategoryType by remember { mutableStateOf("both") }
     var editingIndex by remember { mutableStateOf<Int?>(null) }
     var editingText by remember { mutableStateOf("") }
+    var editingType by remember { mutableStateOf("both") }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp).verticalScroll(rememberScrollState())) {
             tabs.forEachIndexed { index, tab ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = {
-                            if (index > 0) {
-                                val newList = tabs.toMutableList()
-                                val item = newList.removeAt(index)
-                                newList.add(index - 1, item)
-                                onTabsChange(newList)
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = {
+                                if (index > 0) {
+                                    val newList = tabs.toMutableList()
+                                    val item = newList.removeAt(index)
+                                    newList.add(index - 1, item)
+                                    onTabsChange(newList)
+                                }
+                            }, enabled = index > 0, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.ArrowUpward, null, modifier = Modifier.size(18.dp))
                             }
-                        }, enabled = index > 0, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ArrowUpward, null, modifier = Modifier.size(18.dp))
+                            IconButton(onClick = {
+                                if (index < tabs.size - 1) {
+                                    val newList = tabs.toMutableList()
+                                    val item = newList.removeAt(index)
+                                    newList.add(index + 1, item)
+                                    onTabsChange(newList)
+                                }
+                            }, enabled = index < tabs.size - 1, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.ArrowDownward, null, modifier = Modifier.size(18.dp))
+                            }
                         }
-                        IconButton(onClick = {
-                            if (index < tabs.size - 1) {
-                                val newList = tabs.toMutableList()
-                                val item = newList.removeAt(index)
-                                newList.add(index + 1, item)
-                                onTabsChange(newList)
+                        
+                        if (editingIndex == index) {
+                            OutlinedTextField(
+                                value = editingText,
+                                onValueChange = { editingText = it },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                singleLine = true,
+                                trailingIcon = {
+                                    IconButton(onClick = {
+                                        if (editingText.isNotBlank()) {
+                                            val exists = tabs.any { it.name == editingText && tabs.indexOf(it) != index }
+                                            if (!exists) {
+                                                onCategoryRename(tabs[index].name, editingText)
+                                                val newList = tabs.toMutableList()
+                                                newList[index] = MovieCategoryConfig(editingText, editingType)
+                                                onTabsChange(newList)
+                                                editingIndex = null
+                                            }
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            )
+                        } else {
+                            Text(tab.name, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                            IconButton(onClick = { 
+                                editingIndex = index
+                                editingText = tab.name
+                                editingType = tab.type
+                            }) {
+                                Icon(Icons.Default.Edit, null, modifier = Modifier.size(20.dp))
                             }
-                        }, enabled = index < tabs.size - 1, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.ArrowDownward, null, modifier = Modifier.size(18.dp))
+                            if (tabs.size > 1) {
+                                IconButton(onClick = {
+                                    val newList = tabs.toMutableList()
+                                    newList.removeAt(index)
+                                    onTabsChange(newList)
+                                }) {
+                                    Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                }
+                            }
                         }
                     }
                     
                     if (editingIndex == index) {
-                        OutlinedTextField(
-                            value = editingText,
-                            onValueChange = { editingText = it },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            singleLine = true,
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    if (editingText.isNotBlank() && !tabs.contains(editingText)) {
-                                        onCategoryRename(tabs[index], editingText)
-                                        val newList = tabs.toMutableList()
-                                        newList[index] = editingText
-                                        onTabsChange(newList)
-                                        editingIndex = null
-                                    }
-                                }) {
-                                    Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        )
+                        FlowRow(
+                            modifier = Modifier.padding(start = 64.dp, top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CategoryTypeChip("movie", strings.films, editingType == "movie") { editingType = it }
+                            CategoryTypeChip("tv", strings.series, editingType == "tv") { editingType = it }
+                            CategoryTypeChip("both", strings.both, editingType == "both") { editingType = it }
+                        }
                     } else {
-                        Text(tab, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                        IconButton(onClick = { editingIndex = index; editingText = tab }) {
-                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(20.dp))
+                        val typeLabel = when(tab.type) {
+                            "movie" -> strings.films
+                            "tv" -> strings.series
+                            else -> strings.both
                         }
-                        if (tabs.size > 1) {
-                            IconButton(onClick = {
-                                val newList = tabs.toMutableList()
-                                newList.removeAt(index)
-                                onTabsChange(newList)
-                            }) {
-                                Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
-                            }
-                        }
+                        Text(
+                            text = typeLabel,
+                            fontSize = 11.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(start = 72.dp)
+                        )
                     }
                 }
             }
         }
         
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Column(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = newCategoryName,
                 onValueChange = { newCategoryName = it },
                 label = { Text(strings.newCategory) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true
             )
-            IconButton(onClick = {
-                if (newCategoryName.isNotBlank() && !tabs.contains(newCategoryName)) {
-                    onTabsChange(tabs + newCategoryName)
-                    newCategoryName = ""
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CategoryTypeChip("movie", strings.films, newCategoryType == "movie") { newCategoryType = it }
+                    CategoryTypeChip("tv", strings.series, newCategoryType == "tv") { newCategoryType = it }
+                    CategoryTypeChip("both", strings.both, newCategoryType == "both") { newCategoryType = it }
                 }
-            }) {
-                Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
+                
+                IconButton(onClick = {
+                    if (newCategoryName.isNotBlank() && tabs.none { it.name == newCategoryName }) {
+                        onTabsChange(tabs + MovieCategoryConfig(newCategoryName, newCategoryType))
+                        newCategoryName = ""
+                        newCategoryType = "both"
+                    }
+                }) {
+                    Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
+                }
             }
         }
     }
+}
+
+@Composable
+fun CategoryTypeChip(type: String, label: String, isSelected: Boolean, onSelect: (String) -> Unit) {
+    FilterChip(
+        selected = isSelected,
+        onClick = { onSelect(type) },
+        label = { Text(label, fontSize = 11.sp) },
+        modifier = Modifier.height(32.dp)
+    )
 }
 
 @Composable

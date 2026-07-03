@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 val LocalIsDark = staticCompositionLocalOf { true }
+val LocalCustomColors = staticCompositionLocalOf<Pair<Color, Color>?> { null }
 
 private val DarkColorScheme = darkColorScheme(
     primary = LovePink,
@@ -43,6 +44,7 @@ fun MeldTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
+    bgColors: Pair<Color, Color>? = null,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -70,7 +72,10 @@ fun MeldTheme(
         }
     }
 
-    CompositionLocalProvider(LocalIsDark provides darkTheme) {
+    CompositionLocalProvider(
+        LocalIsDark provides darkTheme,
+        LocalCustomColors provides bgColors
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             content = content

@@ -197,7 +197,10 @@ fun ShoppingListScreen(
                     val rate = exchangeRates[selectedItemCurrency]!!
                     val priceDouble = price.toDoubleOrNull() ?: 0.0
                     val converted = priceDouble / rate
-                    val formatter = NumberFormat.getNumberInstance(Locale("es", "CO"))
+                    val formatter = NumberFormat.getNumberInstance(Locale("es", "CO")).apply {
+                        minimumFractionDigits = 2
+                        maximumFractionDigits = 2
+                    }
                     Text(
                         text = "${strings.approx} ${formatter.format(converted)} $localCurrency",
                         fontSize = 12.sp,
@@ -270,7 +273,10 @@ fun ShoppingListScreen(
                     val rate = exchangeRates[selectedItemCurrency]!!
                     val priceDouble = price.toDoubleOrNull() ?: 0.0
                     val converted = priceDouble / rate
-                    val formatter = NumberFormat.getNumberInstance(Locale("es", "CO"))
+                    val formatter = NumberFormat.getNumberInstance(Locale("es", "CO")).apply {
+                        minimumFractionDigits = 2
+                        maximumFractionDigits = 2
+                    }
                     Text(
                         text = "${strings.approx} ${formatter.format(converted)} $localCurrency",
                         fontSize = 12.sp,
@@ -384,44 +390,74 @@ fun ShoppingListScreen(
                 .sortedBy { it.bought }
         }
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(currentList, key = { it.id }) { item ->
-                val isSelected = selectedIds.contains(item.id)
-                ShoppingRow(
-                    item = item,
-                    isSelected = isSelected,
-                    localCurrency = localCurrency,
-                    exchangeRates = exchangeRates,
-                    onToggle = {
-                        db.collection("users").document(userId).collection("shopping_list")
-                            .document(item.id).update("bought", !item.bought)
-                    },
-                    onDelete = {
-                        db.collection("users").document(userId).collection("shopping_list")
-                            .document(item.id).delete()
-                    },
-                    onClick = {
-                        if (isSelectionMode) {
-                            if (isSelected) {
-                                selectedIds.remove(item.id)
-                            } else {
-                                if (selectionStatus == item.bought) {
-                                    selectedIds.add(item.id)
-                                } else {
-                                    Toast.makeText(context, strings.cannotMixItems, Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } else {
-                            editingItem = item
-                        }
-                    },
-                    onLongClick = {
-                        if (!isSelectionMode) selectedIds.add(item.id)
+        if (currentList.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = strings.noItemsYet,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    val emptyText = when {
+                        tabs[selectedTab] == strings.hygiene || tabs[selectedTab] == strings.food -> strings.marketEmpty
+                        tabs[selectedTab] == strings.wishlist -> strings.wishlistEmpty
+                        else -> strings.noPendingItems
                     }
-                )
+                    
+                    Text(
+                        text = emptyText,
+                        color = Color.Gray.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(currentList, key = { it.id }) { item ->
+                    val isSelected = selectedIds.contains(item.id)
+                    ShoppingRow(
+                        item = item,
+                        isSelected = isSelected,
+                        localCurrency = localCurrency,
+                        exchangeRates = exchangeRates,
+                        onToggle = {
+                            db.collection("users").document(userId).collection("shopping_list")
+                                .document(item.id).update("bought", !item.bought)
+                        },
+                        onDelete = {
+                            db.collection("users").document(userId).collection("shopping_list")
+                                .document(item.id).delete()
+                        },
+                        onClick = {
+                            if (isSelectionMode) {
+                                if (isSelected) {
+                                    selectedIds.remove(item.id)
+                                } else {
+                                    if (selectionStatus == item.bought) {
+                                        selectedIds.add(item.id)
+                                    } else {
+                                        Toast.makeText(context, strings.cannotMixItems, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } else {
+                                editingItem = item
+                            }
+                        },
+                        onLongClick = {
+                            if (!isSelectionMode) selectedIds.add(item.id)
+                        }
+                    )
+                }
             }
         }
     }
@@ -737,7 +773,10 @@ fun ShoppingRow(
 
                     if (item.price.isNotBlank()) {
                         Column(horizontalAlignment = Alignment.End) {
-                            val formatter = NumberFormat.getNumberInstance(Locale("es", "CO"))
+                            val formatter = NumberFormat.getNumberInstance(Locale("es", "CO")).apply {
+                                minimumFractionDigits = 2
+                                maximumFractionDigits = 2
+                            }
                             val priceDouble = item.price.toDoubleOrNull() ?: 0.0
                             
                             Text(
@@ -750,8 +789,12 @@ fun ShoppingRow(
                             if (item.currency != localCurrency && exchangeRates.containsKey(item.currency)) {
                                 val rate = exchangeRates[item.currency]!!
                                 val converted = priceDouble / rate
+                                val formatterConverted = NumberFormat.getNumberInstance(Locale("es", "CO")).apply {
+                                    minimumFractionDigits = 2
+                                    maximumFractionDigits = 2
+                                }
                                 Text(
-                                    text = "${strings.approx} ${formatter.format(converted)} $localCurrency",
+                                    text = "${strings.approx} ${formatterConverted.format(converted)} $localCurrency",
                                     fontSize = 10.sp,
                                     color = Color.Gray,
                                     textDecoration = if (item.bought) TextDecoration.LineThrough else null

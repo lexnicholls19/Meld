@@ -32,24 +32,34 @@ import java.time.temporal.TemporalAdjusters
 @Composable
 fun DailyConnectionScreen(
     deviceId: String,
-    userName: String
+    userName: String,
+    sharedId: String
 ) {
     val context = LocalContext.current
     val strings = t()
     val db = FirebaseFirestore.getInstance()
     
-    var currentQuestion by remember { mutableStateOf(QuestionsRepository.getDailyQuestion()) }
+    // El estado de la pregunta ahora es reactivo a la carga desde Firebase
+    var skippedQuestion by remember(sharedId) { mutableStateOf<String?>(null) }
+    val dailyQuestion = QuestionsRepository.getDailyQuestion(sharedId)
+    val currentQuestion = skippedQuestion ?: dailyQuestion
+
     var completedDates by remember { mutableStateOf(setOf<String>()) }
     val today = LocalDate.now()
     val todayStr = today.format(DateTimeFormatter.ISO_DATE)
     
+    // Base reference for relation-tied collections
+    val relationRef = db.collection("relations").document(sharedId)
+
     // Obtener las fechas de la semana actual (Lunes a Domingo)
     val startOfWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val weekDates = (0..6).map { startOfWeek.plusDays(it.toLong()) }
 
     // Cargar estados de completado de Firebase
-    LaunchedEffect(Unit) {
-        db.collection("daily_completions")
+    LaunchedEffect(sharedId) {
+        if (sharedId.isBlank()) return@LaunchedEffect
+        
+        relationRef.collection("daily_completions")
             .whereGreaterThanOrEqualTo("__name__", weekDates.first().format(DateTimeFormatter.ISO_DATE))
             .whereLessThanOrEqualTo("__name__", weekDates.last().format(DateTimeFormatter.ISO_DATE))
             .addSnapshotListener { snapshot, _ ->
@@ -182,7 +192,7 @@ fun DailyConnectionScreen(
             onClick = {
                 if (!isAlreadyAnswered) {
                     // Marcar como contestada en Firebase
-                    db.collection("daily_completions").document(todayStr).set(mapOf("completed" to true))
+                    relationRef.collection("daily_completions").document(todayStr).set(mapOf("completed" to true))
                     
                     // Enviar notificación a la pareja
                     val notification = hashMapOf(
@@ -192,13 +202,16 @@ fun DailyConnectionScreen(
                         "senderName" to userName,
                         "userName" to userName,
                         "senderId" to deviceId,
-                        "deviceId" to deviceId
+                        "deviceId" to deviceId,
+                        "senderUid" to (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""),
+                        "relationId" to sharedId,
+                        "targetTopic" to "relation_$sharedId"
                     )
-                    db.collection("quick_messages").add(notification)
+                    relationRef.collection("quick_messages").add(notification)
                     
                     Toast.makeText(context, strings.answered, Toast.LENGTH_SHORT).show()
                 } else {
-                    currentQuestion = QuestionsRepository.getRandomQuestion()
+                    skippedQuestion = QuestionsRepository.getRandomQuestion(sharedId)
                 }
             },
             shape = RoundedCornerShape(50.dp),

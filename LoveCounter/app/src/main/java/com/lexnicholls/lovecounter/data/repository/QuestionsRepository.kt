@@ -236,27 +236,12 @@ object QuestionsRepository {
         "[💭] ¿Qué es lo que los hace sentir más conectados?"
     ))
 
-    // IDs de Alexander y Laura (Set Privado)
-    private val privateUserIds = setOf(
-        "CX4z9DcQYxTJeaIdyNgzpDQqw6U2", // Alexander
-        "pW562p0UqNfEicrVd0q3oRRE9373"  // Laura
-    )
+    // ID de la Relación Admin
+    private const val ADMIN_RELATION_ID = "66817fc6-c66c-49bb-b0fe-089cbbe70b2c"
 
-    suspend fun loadQuestions(db: FirebaseFirestore) {
+    suspend fun loadQuestions(db: FirebaseFirestore, relationId: String? = null) {
         try {
-            // Cargar Privadas
-            val privateSnapshot = db.collection("questions_admin")
-                .document("private_set")
-                .collection("items")
-                .orderBy("order")
-                .get()
-                .await()
-            
-            if (!privateSnapshot.isEmpty) {
-                _privateQuestions.value = privateSnapshot.documents.mapNotNull { it.getString("text") }
-            }
-
-            // Cargar Públicas
+            // Cargar Públicas siempre
             val publicSnapshot = db.collection("questions_admin")
                 .document("public_set")
                 .collection("items")
@@ -267,26 +252,39 @@ object QuestionsRepository {
             if (!publicSnapshot.isEmpty) {
                 _publicQuestions.value = publicSnapshot.documents.mapNotNull { it.getString("text") }
             }
+
+            // Cargar Privadas SOLO si es la relación admin
+            if (relationId == ADMIN_RELATION_ID) {
+                val privateSnapshot = db.collection("questions_admin")
+                    .document("private_set")
+                    .collection("items")
+                    .orderBy("order")
+                    .get()
+                    .await()
+                
+                if (!privateSnapshot.isEmpty) {
+                    _privateQuestions.value = privateSnapshot.documents.mapNotNull { it.getString("text") }
+                }
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun getQuestionsForUser(): List<String> {
-        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
-        return if (currentUserId in privateUserIds) {
+    private fun getQuestionsForUser(relationId: String?): List<String> {
+        return if (relationId == ADMIN_RELATION_ID) {
             _privateQuestions.value
         } else {
             _publicQuestions.value
         }
     }
 
-    fun getRandomQuestion(): String {
-        return getQuestionsForUser().random()
+    fun getRandomQuestion(relationId: String?): String {
+        return getQuestionsForUser(relationId).random()
     }
 
-    fun getDailyQuestion(): String {
-        val questions = getQuestionsForUser()
+    fun getDailyQuestion(relationId: String?): String {
+        val questions = getQuestionsForUser(relationId)
         if (questions.isEmpty()) return ""
         val today = java.time.LocalDate.now().toString()
         val seed = today.hashCode().toLong()
@@ -294,8 +292,8 @@ object QuestionsRepository {
         return questions[random.nextInt(questions.size)]
     }
 
-    fun getUniqueQuestion(usedQuestions: List<String>): String {
-        val questions = getQuestionsForUser()
+    fun getUniqueQuestion(usedQuestions: List<String>, relationId: String?): String {
+        val questions = getQuestionsForUser(relationId)
         val availableQuestions = questions.filter { it !in usedQuestions }
         return if (availableQuestions.isNotEmpty()) {
             availableQuestions.random()

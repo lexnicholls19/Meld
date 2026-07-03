@@ -236,24 +236,48 @@ fun BucketListScreen(
             strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
         )
         Spacer(modifier = Modifier.height(24.dp))
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(categories, key = { it.id }) { category ->
-                CategoryItem(
-                    category = category,
-                    userId = userId,
-                    db = db,
-                    userName = userName,
-                    isExpanded = expandedCategoryId == category.id,
-                    onExpandedChange = { expanded ->
-                        expandedCategoryId = if (expanded) category.id else null
-                    },
-                    onStatsChange = { completed, total ->
-                        categoryStats[category.id] = Pair(completed, total)
-                    }
-                )
+        
+        if (categories.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = strings.noItemsYet,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = strings.bucketEmpty,
+                        color = Color.Gray.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(categories, key = { it.id }) { category ->
+                    CategoryItem(
+                        category = category,
+                        userId = userId,
+                        db = db,
+                        userName = userName,
+                        isExpanded = expandedCategoryId == category.id,
+                        onExpandedChange = { expanded ->
+                            expandedCategoryId = if (expanded) category.id else null
+                        },
+                        onStatsChange = { completed, total ->
+                            categoryStats[category.id] = Pair(completed, total)
+                        }
+                    )
+                }
             }
         }
     }

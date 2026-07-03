@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
@@ -42,6 +43,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Date
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +61,7 @@ fun RemindersScreen(
     
     var pendingReminders by remember { mutableStateOf<List<ReminderItem>>(emptyList()) }
     var completedReminders by remember { mutableStateOf<List<ReminderItem>>(emptyList()) }
+    var recurrentReminders by remember { mutableStateOf<List<ReminderItem>>(emptyList()) }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     val selectedIds = remember { mutableStateListOf<String>() }
@@ -83,10 +86,45 @@ fun RemindersScreen(
                             dueDate = doc.getTimestamp("dueDate"),
                             completed = doc.getBoolean("completed") ?: false,
                             addedBy = doc.getString("addedBy") ?: strings.someone,
-                            timestamp = doc.getTimestamp("timestamp") ?: Timestamp.now()
+                            timestamp = doc.getTimestamp("timestamp") ?: Timestamp.now(),
+                            isRecurrent = doc.getBoolean("isRecurrent") ?: false,
+                            resetDay = doc.getLong("resetDay")?.toInt() ?: 1,
+                            lastResetMonth = doc.getLong("lastResetMonth")?.toInt() ?: -1,
+                            lastResetYear = doc.getLong("lastResetYear")?.toInt() ?: -1
                         )
                     }
                     
+                    // Logic for automatic reset of recurrent items
+                    val now = LocalDate.now()
+                    val currentMonth = now.monthValue
+                    val currentYear = now.year
+                    val currentDay = now.dayOfMonth
+
+                    val batch = db.batch()
+                    var needsCommit = false
+
+                    allItems.forEach { item ->
+                        if (item.isRecurrent && item.completed) {
+                            val lastMonth = item.lastResetMonth
+                            val lastYear = item.lastResetYear
+                            
+                            // Si el mes/año actual es posterior al último reset Y el día actual >= día de reset
+                            val shouldReset = (currentYear > lastYear || (currentYear == lastYear && currentMonth > lastMonth)) &&
+                                    currentDay >= item.resetDay
+                            
+                            if (shouldReset) {
+                                val docRef = collection.document(item.id)
+                                batch.update(docRef, mapOf(
+                                    "completed" to false,
+                                    "lastResetMonth" to currentMonth,
+                                    "lastResetYear" to currentYear
+                                ))
+                                needsCommit = true
+                            }
+                        }
+                    }
+                    if (needsCommit) batch.commit()
+
                     fun sortReminders(list: List<ReminderItem>): List<ReminderItem> {
                         return list.sortedWith(
                             compareBy<ReminderItem> { it.dueDate == null }
@@ -95,8 +133,9 @@ fun RemindersScreen(
                         )
                     }
 
-                    pendingReminders = sortReminders(allItems.filter { !it.completed })
-                    completedReminders = sortReminders(allItems.filter { it.completed })
+                    pendingReminders = sortReminders(allItems.filter { !it.completed && !it.isRecurrent })
+                    completedReminders = sortReminders(allItems.filter { it.completed && !it.isRecurrent })
+                    recurrentReminders = allItems.filter { it.isRecurrent }.sortedBy { it.resetDay }
                 }
             }
         onDispose { registration.remove() }
@@ -112,6 +151,8 @@ fun RemindersScreen(
         var text by remember { mutableStateOf(editingItem!!.text) }
         var description by remember { mutableStateOf(editingItem!!.description) }
         var location by remember { mutableStateOf(editingItem!!.location) }
+        var isRecurrent by remember { mutableStateOf(editingItem!!.isRecurrent) }
+        var resetDay by remember { mutableIntStateOf(editingItem!!.resetDay) }
         
         val initialDateMillis = editingItem!!.dueDate?.let {
             it.toDate().toInstant().atZone(ZoneOffset.UTC).toLocalDate()
@@ -149,13 +190,19 @@ fun RemindersScreen(
                     val updates = mutableMapOf<String, Any>(
                         "text" to text,
                         "description" to description,
-                        "location" to location
+                        "location" to location,
+                        "isRecurrent" to isRecurrent
                     )
                     
-                    if (dateState.selectedDateMillis != null) {
-                        updates["dueDate"] = Timestamp(Date(dateState.selectedDateMillis!!))
-                    } else {
+                    if (isRecurrent) {
+                        updates["resetDay"] = resetDay
                         updates["dueDate"] = com.google.firebase.firestore.FieldValue.delete()
+                    } else {
+                        if (dateState.selectedDateMillis != null) {
+                            updates["dueDate"] = Timestamp(Date(dateState.selectedDateMillis!!))
+                        } else {
+                            updates["dueDate"] = com.google.firebase.firestore.FieldValue.delete()
+                        }
                     }
                     
                     db.collection("users").document(userId).collection("reminders")
@@ -173,24 +220,42 @@ fun RemindersScreen(
                 LoveTextField(value = location, onValueChange = { location = it }, label = strings.location, isOptional = true)
                 Spacer(Modifier.height(16.dp))
                 
-                val dateDisplay = dateState.selectedDateMillis?.let {
-                    Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                } ?: strings.notSelected
-                
-                OutlinedCard(
-                    onClick = { showDatePicker = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                if (isRecurrent) {
+                    Text(text = strings.resetDay + ": $resetDay", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ReminderColor)
+                    Slider(
+                        value = resetDay.toFloat(),
+                        onValueChange = { resetDay = it.roundToInt() },
+                        valueRange = 1f..31f,
+                        steps = 30
+                    )
+                    TextButton(onClick = { isRecurrent = false }) {
+                        Text(strings.cancel + " " + strings.monthly, color = Color.Gray)
+                    }
+                } else {
+                    val dateDisplay = dateState.selectedDateMillis?.let {
+                        Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                    } ?: strings.notSelected
+                    
+                    OutlinedCard(
+                        onClick = { showDatePicker = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.Event, null, tint = Color.Gray)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(strings.dueDateOptional, fontSize = 12.sp, color = Color.Gray)
-                            Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Event, null, tint = Color.Gray)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(strings.dueDateOptional, fontSize = 12.sp, color = Color.Gray)
+                                Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                    if (selectedTab == 1) {
+                        TextButton(onClick = { isRecurrent = true }) {
+                            Text(strings.recurrent)
                         }
                     }
                 }
@@ -204,6 +269,9 @@ fun RemindersScreen(
         var location by remember { mutableStateOf("") }
         val dateState = rememberDatePickerState()
         var showDatePicker by remember { mutableStateOf(false) }
+        
+        // Recurrence State
+        var resetDay by remember { mutableIntStateOf(1) }
 
         if (showDatePicker) {
             DatePickerDialog(
@@ -227,7 +295,7 @@ fun RemindersScreen(
 
         LoveAlertDialog(
             onDismissRequest = onDismissDialog,
-            title = strings.add,
+            title = if (selectedTab == 1) strings.recurrent else strings.add,
             onConfirm = {
                 if (text.isNotBlank()) {
                     val item = mutableMapOf<String, Any>(
@@ -236,10 +304,19 @@ fun RemindersScreen(
                         "location" to location,
                         "completed" to false,
                         "timestamp" to Timestamp.now(),
-                        "addedBy" to userName
+                        "addedBy" to userName,
+                        "isRecurrent" to (selectedTab == 1)
                     )
-                    dateState.selectedDateMillis?.let {
-                        item["dueDate"] = Timestamp(Date(it))
+                    
+                    if (selectedTab == 1) {
+                        item["resetDay"] = resetDay
+                        val now = LocalDate.now()
+                        item["lastResetMonth"] = now.monthValue
+                        item["lastResetYear"] = now.year
+                    } else {
+                        dateState.selectedDateMillis?.let {
+                            item["dueDate"] = Timestamp(Date(it))
+                        }
                     }
 
                     db.collection("users").document(userId).collection("reminders").add(item)
@@ -258,24 +335,36 @@ fun RemindersScreen(
                 LoveTextField(value = location, onValueChange = { location = it }, label = strings.location, isOptional = true)
                 Spacer(Modifier.height(16.dp))
 
-                val dateDisplay = dateState.selectedDateMillis?.let {
-                    Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                } ?: strings.notSelected
+                if (selectedTab == 1) {
+                    // Options for Recurrent
+                    Text(text = strings.resetDay + ": $resetDay", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ReminderColor)
+                    Slider(
+                        value = resetDay.toFloat(),
+                        onValueChange = { resetDay = it.roundToInt() },
+                        valueRange = 1f..31f,
+                        steps = 30
+                    )
+                    Text(text = strings.autoReset + " (" + strings.monthly + ")", fontSize = 12.sp, color = Color.Gray)
+                } else {
+                    val dateDisplay = dateState.selectedDateMillis?.let {
+                        Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                    } ?: strings.notSelected
 
-                OutlinedCard(
-                    onClick = { showDatePicker = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    OutlinedCard(
+                        onClick = { showDatePicker = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.Event, null, tint = Color.Gray)
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(strings.dueDateOptional, fontSize = 12.sp, color = Color.Gray)
-                            Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Event, null, tint = Color.Gray)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(strings.dueDateOptional, fontSize = 12.sp, color = Color.Gray)
+                                Text(dateDisplay, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            }
                         }
                     }
                 }
@@ -340,50 +429,86 @@ fun RemindersScreen(
                 onClick = { selectedTab = 0 },
                 text = { Text(strings.currentReminders) }
             )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text(strings.recurrent) }
+            )
             if (completedReminders.isNotEmpty()) {
                 Tab(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
                     text = { Text(strings.completed) }
                 )
-            } else if (selectedTab == 1) {
+            } else if (selectedTab == 2) {
                 selectedTab = 0
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        val currentList = if (selectedTab == 0) pendingReminders else completedReminders
+        val currentList = when(selectedTab) {
+            0 -> pendingReminders
+            1 -> recurrentReminders
+            else -> completedReminders
+        }
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            itemsIndexed(currentList, key = { _, item -> item.id }) { _, item ->
-                val isSelected = selectedIds.contains(item.id)
+        if (currentList.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = strings.noItemsYet,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = when (selectedTab) {
+                            0 -> strings.remindersCurrentEmpty
+                            1 -> strings.remindersRecurrentEmpty
+                            else -> strings.noPendingItems
+                        },
+                        color = Color.Gray.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(currentList, key = { _, item -> item.id }) { _, item ->
+                    val isSelected = selectedIds.contains(item.id)
 
-                ReminderRow(
-                    item = item,
-                    isSelected = isSelected,
-                    onToggle = {
-                        db.collection("users").document(userId).collection("reminders")
-                            .document(item.id).update("completed", !item.completed)
-                    },
-                    onDelete = {
-                        db.collection("users").document(userId).collection("reminders")
-                            .document(item.id).delete()
-                    },
-                    onClick = {
-                        if (isSelectionMode) {
-                            if (isSelected) selectedIds.remove(item.id) else selectedIds.add(item.id)
-                        } else {
-                            editingItem = item
+                    ReminderRow(
+                        item = item,
+                        isSelected = isSelected,
+                        onToggle = {
+                            db.collection("users").document(userId).collection("reminders")
+                                .document(item.id).update("completed", !item.completed)
+                        },
+                        onDelete = {
+                            db.collection("users").document(userId).collection("reminders")
+                                .document(item.id).delete()
+                        },
+                        onClick = {
+                            if (isSelectionMode) {
+                                if (isSelected) selectedIds.remove(item.id) else selectedIds.add(item.id)
+                            } else {
+                                editingItem = item
+                            }
+                        },
+                        onLongClick = {
+                            if (!isSelectionMode) selectedIds.add(item.id)
                         }
-                    },
-                    onLongClick = {
-                        if (!isSelectionMode) selectedIds.add(item.id)
-                    }
-                )
+                    )
+                }
             }
         }
     }
@@ -497,7 +622,26 @@ fun ReminderRow(
                         }
                     }
 
-                    if (item.dueDate != null) {
+                    if (item.isRecurrent) {
+                        Surface(
+                            color = ReminderColor.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Repeat, null, modifier = Modifier.size(14.dp), tint = ReminderColor)
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "${strings.resetDay} ${item.resetDay}",
+                                    fontSize = 12.sp,
+                                    color = ReminderColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else if (item.dueDate != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 8.dp)
@@ -549,5 +693,9 @@ data class ReminderItem(
     val dueDate: Timestamp? = null,
     val completed: Boolean,
     val addedBy: String,
-    val timestamp: Timestamp = Timestamp.now()
+    val timestamp: Timestamp = Timestamp.now(),
+    val isRecurrent: Boolean = false,
+    val resetDay: Int = 1,
+    val lastResetMonth: Int = -1, // 1-12
+    val lastResetYear: Int = -1
 )

@@ -18,13 +18,17 @@ import androidx.compose.ui.unit.sp
 import com.lexnicholls.lovecounter.util.t
 import com.lexnicholls.lovecounter.ui.theme.LovePink
 import com.lexnicholls.lovecounter.ui.theme.LocalIsDark
+import com.lexnicholls.lovecounter.ui.theme.LocalCustomColors
 
 @Composable
 fun AppBackground(content: @Composable () -> Unit) {
     val isDark = LocalIsDark.current
+    val customColors = LocalCustomColors.current
     
     // Definimos los colores del gradiente para ambos temas
-    val gradientColors = if (isDark) {
+    val gradientColors = if (customColors != null) {
+        listOf(customColors.first, customColors.second)
+    } else if (isDark) {
         listOf(
             Color(0xFF0F172A), // Azul marino muy oscuro
             Color(0xFF1E293B), // Azul noche
@@ -64,6 +68,7 @@ fun LoveAlertDialog(
     confirmButtonText: String = t().confirm,
     dismissButtonText: String = t().cancel,
     onConfirm: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
     showDismissButton: Boolean = true,
     titleContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
@@ -98,7 +103,10 @@ fun LoveAlertDialog(
         },
         dismissButton = if (showDismissButton) {
             {
-                TextButton(onClick = onDismissRequest) {
+                TextButton(onClick = {
+                    onDismiss?.invoke()
+                    onDismissRequest()
+                }) {
                     Text(dismissButtonText)
                 }
             }

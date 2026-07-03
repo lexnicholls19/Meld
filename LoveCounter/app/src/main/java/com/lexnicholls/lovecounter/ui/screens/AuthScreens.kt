@@ -30,6 +30,7 @@ import com.lexnicholls.lovecounter.ui.theme.*
 
 @Composable
 fun LoginScreen(
+    hasAccountOnDevice: Boolean,
     onNavigateToRegister: () -> Unit,
     onLoginSuccess: () -> Unit
 ) {
@@ -81,7 +82,8 @@ fun LoginScreen(
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        Text(text = strings.welcomeBack, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        val welcomeText = if (hasAccountOnDevice) strings.welcomeBack else strings.welcome
+        Text(text = welcomeText, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         
         Spacer(modifier = Modifier.height(32.dp))
 
