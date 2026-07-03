@@ -132,24 +132,37 @@ fun MoviesListScreen(
         val categoriesRegistration = categoriesDoc.addSnapshotListener { snapshot, e ->
             if (e != null) return@addSnapshotListener
             if (snapshot != null && snapshot.exists()) {
-                val list = snapshot["list"] as? List<Map<String, Any>>
-                if (!list.isNullOrEmpty()) {
-                    tabs = list.map { 
-                        MovieCategoryConfig(
-                            name = it["name"] as? String ?: "",
-                            type = it["type"] as? String ?: "both"
-                        )
-                    }
-                } else {
-                    // Legacy migration: maybe it's still a List<String>
-                    val legacyList = snapshot["list"] as? List<String>
-                    if (!legacyList.isNullOrEmpty()) {
-                        tabs = legacyList.map { 
-                            MovieCategoryConfig(
-                                name = it,
-                                type = if (it == strings.films) "movie" else if (it == strings.series) "tv" else "both"
-                            )
+                val rawList = snapshot["list"] as? List<*>
+                if (rawList != null) {
+                    val newTabs = mutableListOf<MovieCategoryConfig>()
+                    rawList.forEach { item ->
+                        when (item) {
+                            is Map<*, *> -> {
+                                newTabs.add(
+                                    MovieCategoryConfig(
+                                        name = item["name"] as? String ?: "",
+                                        type = item["type"] as? String ?: "both"
+                                    )
+                                )
+                            }
+                            is String -> {
+                                newTabs.add(
+                                    MovieCategoryConfig(
+                                        name = item,
+                                        type = if (item == strings.films) "movie" else if (item == strings.series) "tv" else "both"
+                                    )
+                                )
+                            }
                         }
+                    }
+                    if (newTabs.isNotEmpty()) {
+                        tabs = newTabs
+                    } else {
+                        // Default if empty or invalid items
+                        tabs = listOf(
+                            MovieCategoryConfig(strings.films, "movie"),
+                            MovieCategoryConfig(strings.series, "tv")
+                        )
                     }
                 }
             }
