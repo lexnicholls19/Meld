@@ -14,8 +14,8 @@ android {
         applicationId = "com.lexnicholls.lovecounter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "2.0.0"
+        versionCode = 9
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -40,6 +40,11 @@ android {
     }
 }
 
+// Nombre base para los archivos generados (APK/Bundle)
+base {
+    archivesName.set("Meld-${android.defaultConfig.versionName}")
+}
+
 dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(platform(libs.androidx.compose.bom))
@@ -47,6 +52,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.config)
     implementation(libs.firebase.ai)
     implementation(libs.firebase.storage)
     implementation(libs.androidx.appcompat)
@@ -64,6 +70,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    debugImplementation(libs.androidx.ui.tooling)
     implementation(libs.androidx.ui.tooling.preview)
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")

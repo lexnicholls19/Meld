@@ -173,8 +173,10 @@ class LoveWidget : GlanceAppWidget() {
                 (manualPage + autoOffset) % totalPages
             }
             
+            val relationshipDate = sharedPrefs.getLong("relationship_date", -1L)
+            
             val currentPageType = if (pages.isNotEmpty()) pages[effectivePage] else "Timer"
-            WidgetContent(effectivePage, totalPages, currentPageType, displayItems)
+            WidgetContent(effectivePage, totalPages, currentPageType, displayItems, relationshipDate)
         }
     }
 
@@ -183,16 +185,21 @@ class LoveWidget : GlanceAppWidget() {
         currentPageIndex: Int, 
         totalActivePages: Int,
         currentPageType: String,
-        items: List<ImportantDateWithSource>
+        items: List<ImportantDateWithSource>,
+        relationshipDate: Long
     ) {
         val size = LocalSize.current
         val titleFontSize = if (size.height < 80.dp) 11.sp else 14.sp
         val daysFontSize = if (size.height < 80.dp) 24.sp else 36.sp
         val itemFontSize = if (size.height < 80.dp) 10.sp else 12.sp
         
-        val startDate = LocalDateTime.of(2021, 1, 4, 0, 0)
+        val startDateTime = if (relationshipDate != -1L) {
+            java.time.Instant.ofEpochMilli(relationshipDate).atZone(java.time.ZoneOffset.UTC).toLocalDateTime()
+        } else {
+            LocalDateTime.of(2021, 1, 4, 0, 0)
+        }
         val now = LocalDateTime.now()
-        val duration = Duration.between(startDate, now)
+        val duration = Duration.between(startDateTime, now)
         val totalDays = duration.toDays()
 
         Box(

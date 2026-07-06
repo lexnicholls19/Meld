@@ -1,36 +1,32 @@
 package com.lexnicholls.lovecounter.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,22 +48,72 @@ fun MovieDetailScreen(
     val movie by viewModel.selectedMovie
     val isLoading by viewModel.isLoading
     val context = LocalContext.current
-    val dateFormatter = remember { java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault()) }
+    val dateFormatter = remember { java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.getDefault()) }
 
     LaunchedEffect(movieId) {
         viewModel.getMovieDetails(userId, movieId, mediaType)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(movie?.title ?: strings.details) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
-                    }
-                },
-                actions = {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Backdrop (Blurred Poster)
+        movie?.posterUrl?.let { url ->
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+                    .blur(50.dp),
+                contentScale = ContentScale.Crop,
+                alpha = 0.3f
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.4f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+            )
+        }
+
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = LovePink)
+            }
+        } else if (movie != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header Row: Title aligned Left + Watched Toggle Right
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = movie!!.title,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    
                     val isWatched = movie?.watchState == com.lexnicholls.lovecounter.domain.model.WatchState.WATCHED
                     IconButton(onClick = {
                         movie?.let {
@@ -79,37 +125,25 @@ fun MovieDetailScreen(
                         }
                     }) {
                         Icon(
-                            Icons.Default.Visibility,
+                            if (isWatched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = if (isWatched) Color.Green else Color.Gray
+                            tint = if (isWatched) Color(0xFF4CAF50) else Color.Gray,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        },
-        containerColor = Color.Transparent
-    ) { padding ->
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = LovePink)
-            }
-        } else if (movie != null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp, top = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Movie Poster
-                val isWatched = movie?.watchState == com.lexnicholls.lovecounter.domain.model.WatchState.WATCHED
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Movie Poster with high quality styling
                 Card(
                     modifier = Modifier
-                        .size(200.dp, 300.dp)
-                        .clip(RoundedCornerShape(16.dp)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        .width(220.dp)
+                        .aspectRatio(0.68f)
+                        .shadow(24.dp, RoundedCornerShape(24.dp)),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (movie!!.posterUrl != null) {
@@ -120,66 +154,109 @@ fun MovieDetailScreen(
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.Movie, null, modifier = Modifier.size(64.dp), tint = Color.Gray)
                             }
                         }
+                    }
+                }
 
-                        if (isWatched && movie!!.watchedDate != null) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .align(Alignment.BottomCenter)
-                                    .background(Color.Black.copy(alpha = 0.6f))
-                                    .padding(vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = strings.markedAsWatchedOn.format(dateFormatter.format(java.util.Date(movie!!.watchedDate!!))),
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Metadata Info Row (Year + Specs)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = movie!!.releaseYear,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.Gray
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (movie!!.mediaType == "tv") {
+                            DetailInfoItem(Icons.AutoMirrored.Filled.FormatListBulleted, "${movie!!.episodeCount ?: "?"} ep")
+                            DetailDivider()
+                            DetailInfoItem(Icons.Default.Repeat, "${movie!!.seasonCount ?: "?"} se")
+                        } else {
+                            val durationText = movie!!.duration?.let { 
+                                val h = it / 60
+                                val m = it % 60
+                                if (h > 0) "${h}h ${m}m" else "${m}m"
+                            } ?: "?"
+                            DetailInfoItem(Icons.Default.AccessTime, durationText)
+                        }
+                        
+                        if (movie!!.rating > 0) {
+                            DetailDivider()
+                            DetailInfoItem(Icons.Default.Star, movie!!.rating.toString(), Color(0xFFFFD700))
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(32.dp))
 
-                // Info Chips
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    if (movie!!.mediaType == "tv") {
-                        // Series: episodes and seasons
-                        val episodesText = "${movie!!.episodeCount ?: "?"} ${strings.episodes}"
-                        val seasonsText = "${movie!!.seasonCount ?: "?"} ${strings.seasons}"
-                        
-                        InfoChip(icon = Icons.AutoMirrored.Filled.List, text = episodesText)
-                        if (movie!!.rating > 0) {
-                            InfoChip(icon = Icons.Default.Star, text = movie!!.rating.toString(), color = Color(0xFFFFD700))
-                        }
-                        InfoChip(icon = Icons.Default.Repeat, text = seasonsText)
-                    } else {
-                        // Movies: duration
-                        val durationText = movie!!.duration?.let { 
-                            val h = it / 60
-                            val m = it % 60
-                            if (h > 0) "${h}h ${m}m" else "${m}m"
-                        } ?: strings.notSelected
-                        
-                        InfoChip(icon = Icons.Default.AccessTime, text = durationText)
-                        if (movie!!.rating > 0) {
-                            InfoChip(icon = Icons.Default.Star, text = movie!!.rating.toString(), color = Color(0xFFFFD700))
+                // Watch Status Section
+                val isWatched = movie?.watchState == com.lexnicholls.lovecounter.domain.model.WatchState.WATCHED
+                if (isWatched && movie!!.watchedDate != null) {
+                    Surface(
+                        color = Color(0xFF4CAF50).copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.2f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50))
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = strings.markedAsWatchedOn.format(dateFormatter.format(java.util.Date(movie!!.watchedDate!!))),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF4CAF50)
+                            )
                         }
                     }
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                // Added By
+                if (movie!!.addedBy.isNotBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Surface(
+                            color = LovePink.copy(alpha = 0.1f),
+                            shape = CircleShape,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Person, null, modifier = Modifier.padding(6.dp), tint = LovePink)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = "${strings.addedBy}: ",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = movie!!.addedBy,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = LovePink
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
 
-                // Streaming Platforms
+                // Platforms
                 val distinctPlatforms: List<com.lexnicholls.lovecounter.domain.model.MeldPlatform> = remember(movie?.platforms) {
                     movie?.platforms?.let { list ->
                         val seenBases = mutableSetOf<String>()
@@ -196,12 +273,7 @@ fun MovieDetailScreen(
                                 name.contains("youtube") -> "youtube"
                                 else -> name.trim()
                             }
-                            if (seenBases.contains(baseName)) {
-                                false
-                            } else {
-                                seenBases.add(baseName)
-                                true
-                            }
+                            if (seenBases.contains(baseName)) false else { seenBases.add(baseName); true }
                         }
                     } ?: emptyList()
                 }
@@ -211,71 +283,54 @@ fun MovieDetailScreen(
                         text = "Available on",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 8.dp)
                     ) {
-                        distinctPlatforms.forEach { platform ->
-                            AsyncImage(
-                                model = platform.logoUrl,
-                                contentDescription = platform.name,
+                        items(distinctPlatforms) { platform ->
+                            Card(
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.White)
-                                    .clickable { 
-                                        openPlatform(context, platform.url, platform.deepLink, platform.name)
-                                    },
-                                contentScale = ContentScale.Fit
-                            )
+                                    .size(60.dp)
+                                    .clickable { openPlatform(context, platform.url, platform.deepLink, platform.name) },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            ) {
+                                AsyncImage(
+                                    model = platform.logoUrl,
+                                    contentDescription = platform.name,
+                                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                // Added By (If from watchlist)
-                if (movie!!.addedBy.isNotBlank()) {
-                    Surface(
-                        color = LovePink.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp), tint = LovePink)
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = "${strings.addedBy}: ${movie!!.addedBy}",
-                                fontSize = 12.sp,
-                                color = LovePink,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(32.dp))
                 }
 
                 // Overview
                 Text(
                     text = strings.description,
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.Start)
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = if (movie!!.overview.isNotBlank()) movie!!.overview else "No description available.",
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     lineHeight = 24.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                    fontStyle = if (movie!!.overview.isBlank()) FontStyle.Italic else FontStyle.Normal
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    fontStyle = if (movie!!.overview.isBlank()) FontStyle.Italic else FontStyle.Normal,
+                    textAlign = TextAlign.Justify
                 )
                 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(80.dp))
             }
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -285,10 +340,27 @@ fun MovieDetailScreen(
     }
 }
 
+@Composable
+fun DetailDivider() {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .size(4.dp)
+            .background(Color.Gray.copy(alpha = 0.3f), CircleShape)
+    )
+}
+
+@Composable
+fun DetailInfoItem(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, color: Color = Color.Gray) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, modifier = Modifier.size(18.dp), tint = color)
+        Spacer(Modifier.width(8.dp))
+        Text(text = text, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
 private fun openPlatform(context: android.content.Context, url: String?, deepLink: String?, platformName: String) {
     val name = platformName.lowercase()
-    android.util.Log.d("CinemaDeepLink", "Opening platform: $platformName, Target: $name")
-    
     val targetPackage = when {
         name.contains("netflix") -> "com.netflix.mediaclient"
         name.contains("hulu") -> "com.hulu.plus"
@@ -319,7 +391,6 @@ private fun openPlatform(context: android.content.Context, url: String?, deepLin
             openPlayStore(context, targetPackage)
         }
     } else if (!url.isNullOrBlank()) {
-        // Fallback for unknown platforms that still have a URL
         try {
             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -344,22 +415,5 @@ private fun openPlayStore(context: android.content.Context, packageName: String)
         context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$packageName")))
     } catch (e: Exception) {
         context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")))
-    }
-}
-
-@Composable
-fun InfoChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, color: Color = MaterialTheme.colorScheme.primary) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, null, modifier = Modifier.size(16.dp), tint = color)
-            Spacer(Modifier.width(8.dp))
-            Text(text = text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        }
     }
 }
