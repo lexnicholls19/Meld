@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.app.NotificationCompat
-import androidx.compose.animation.*
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -204,8 +203,8 @@ class MainActivity : ComponentActivity() {
             }
 
             var userName by rememberSaveable { mutableStateOf(sharedPrefs.getString("user_name", "") ?: "") }
-            var bgColor1 by rememberSaveable { mutableStateOf(sharedPrefs.getString("bg_color_1", "#EBE3FF") ?: "#EBE3FF") }
-            var bgColor2 by rememberSaveable { mutableStateOf(sharedPrefs.getString("bg_color_2", "#FFD9E2") ?: "#FFD9E2") }
+            var bgColor1 by rememberSaveable { mutableStateOf(sharedPrefs.getString("bg_color_1", null)) }
+            var bgColor2 by rememberSaveable { mutableStateOf(sharedPrefs.getString("bg_color_2", null)) }
             var widgetConfigs by rememberSaveable { 
                 val saved = sharedPrefs.getString("widget_configs", "Timer") ?: "Timer"
                 mutableStateOf(saved.split(",").filter { it.isNotBlank() }.toSet())
@@ -247,7 +246,7 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(saved.split(",").filter { it.isNotBlank() }.toSet())
             }
             var categoryOrder by rememberSaveable {
-                val allPossible = listOf("reminders", "dates", "market", "bucket", "drawing", "daily", "movies")
+                val allPossible = listOf("reminders", "dates", "market", "bucket", "drawing", "daily", "movies", "wellness")
                 val saved = sharedPrefs.getString("category_order", null)
                 val currentList = if (saved == null) {
                     allPossible
@@ -300,8 +299,8 @@ class MainActivity : ComponentActivity() {
 
                     mainTitle = getString("main_screen_title", "") ?: ""
                     userName = getString("user_name", "") ?: ""
-                    bgColor1 = getString("bg_color_1", if (useDarkTheme) "#0F172A" else "#EBE3FF") ?: "#EBE3FF"
-                    bgColor2 = getString("bg_color_2", if (useDarkTheme) "#4C0519" else "#FFD9E2") ?: "#FFD9E2"
+                    bgColor1 = getString("bg_color_1", null)
+                    bgColor2 = getString("bg_color_2", null)
                     fabMessage1 = getString("fab_message_1", null)
                     fabMessage2 = getString("fab_message_2", null)
                     fabIcon1 = getString("fab_icon_1", "") ?: ""
@@ -313,12 +312,17 @@ class MainActivity : ComponentActivity() {
                     autoRotateWidget = getBoolean("widget_auto_rotate", false)
                     autoRotateInterval = getInt("widget_rotate_interval", 60)
                     
-                    val defaultCategories = "reminders,dates,market,bucket,drawing,daily,movies"
+                    val defaultCategories = "reminders,dates,market,bucket,drawing,daily,movies,wellness"
                     visibleCategories = (getString("visible_categories", defaultCategories) ?: defaultCategories)
                         .split(",").filter { it.isNotBlank() }.toSet()
                     
-                    categoryOrder = (getString("category_order", null) ?: defaultCategories)
-                        .split(",").filter { it.isNotBlank() }.toList()
+                    val rawOrder = getString("category_order", null) ?: defaultCategories
+                    categoryOrder = rawOrder.split(",").filter { it.isNotBlank() }.toMutableList().apply {
+                        val allPossible = listOf("reminders", "dates", "market", "bucket", "drawing", "daily", "movies", "wellness")
+                        allPossible.forEach { cat ->
+                            if (!contains(cat)) add(cat)
+                        }
+                    }.toList()
 
                     val sDate = sharedPrefs.getLong(prefix + "relationship_date", -1L)
                     relationshipDate = if (sDate != -1L) sDate else {
@@ -337,7 +341,7 @@ class MainActivity : ComponentActivity() {
                     fabIcon1 = sharedPrefs.getString("fab_icon_1", "") ?: ""
                     fabIcon2 = sharedPrefs.getString("fab_icon_2", "") ?: ""
                     localCurrency = sharedPrefs.getString("local_currency", "COP") ?: "COP"
-                    val defaultCategories = "reminders,dates,market,bucket,drawing,daily,movies"
+                    val defaultCategories = "reminders,dates,market,bucket,drawing,daily,movies,wellness"
                     visibleCategories = (sharedPrefs.getString("visible_categories", defaultCategories) ?: defaultCategories)
                         .split(",").filter { it.isNotBlank() }.toSet()
                     categoryOrder = (sharedPrefs.getString("category_order", defaultCategories) ?: defaultCategories)
@@ -385,11 +389,13 @@ class MainActivity : ComponentActivity() {
             MeldTheme(
                 darkTheme = useDarkTheme,
                 dynamicColor = false, // Set to true if you want Android 12+ dynamic colors
-                bgColors = try { 
-                    val c1 = android.graphics.Color.parseColor(bgColor1)
-                    val c2 = android.graphics.Color.parseColor(bgColor2)
-                    Color(c1) to Color(c2)
-                } catch(_: Exception) { null }
+                bgColors = if (bgColor1 != null && bgColor2 != null) {
+                    try { 
+                        val c1 = android.graphics.Color.parseColor(bgColor1)
+                        val c2 = android.graphics.Color.parseColor(bgColor2)
+                        Color(c1) to Color(c2)
+                    } catch(_: Exception) { null }
+                } else null
             ) {
                 ProvideStrings(appLanguage) {
                     val strings = t()
@@ -408,13 +414,21 @@ class MainActivity : ComponentActivity() {
                         isMainReorderMode = false
                         isMovieSelectionMode = false
                         showDeleteMoviesDialog = false
+                        showAddDialog = false
                     }
 
                     // Handle System Back Button
                     BackHandler(enabled = true) {
                         val currentRoute = currentDestination?.route
                         when (currentRoute) {
-                            Screen.Login.name, Screen.Main.name -> showExitDialog = true
+                            Screen.Login.name -> showExitDialog = true
+                            Screen.Main.name -> {
+                                if (isMainReorderMode) {
+                                    isMainReorderMode = false
+                                } else {
+                                    showExitDialog = true
+                                }
+                            }
                             Screen.Register.name -> navController.popBackStack()
                             else -> navController.navigate(Screen.Main.name) {
                                 popUpTo(navController.graph.findStartDestination().id) {
@@ -555,6 +569,7 @@ class MainActivity : ComponentActivity() {
                                     targetRoute != Screen.Register.name && 
                                     targetRoute != Screen.Welcome.name && 
                                     targetRoute != Screen.Drawing.name && 
+                                    targetRoute != Screen.Wellness.name &&
                                     targetRoute?.startsWith(Screen.MovieDetail.name) != true
                                 ) {
                                     Row(
@@ -795,7 +810,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         composable(Screen.Welcome.name) {
                                             WelcomeScreen(
-                                                onContinue = { name, title, categories, date, profileUri, currency, f1, f2, f1i, f2i ->
+                                                onContinue = { name, title, categories, date, profileUri, currency, f1, f2, f1i, f2i, trackWellness, shareWellness ->
                                                     userName = name
                                                     mainTitle = title
                                                     visibleCategories = categories
@@ -807,6 +822,7 @@ class MainActivity : ComponentActivity() {
                                                     fabIcon2 = f2i
                                                     
                                                     loveViewModel.updateProfile(name)
+                                                    loveViewModel.updateWellnessPreferences(trackWellness, shareWellness)
                                                     
                                                     val prefix = if (sharedId != null) "rel_${sharedId}_" else ""
                                                     sharedPrefs.edit {
@@ -818,11 +834,15 @@ class MainActivity : ComponentActivity() {
                                                         putString("${prefix}fab_message_2", f2)
                                                         putString("${prefix}fab_icon_1", f1i)
                                                         putString("${prefix}fab_icon_2", f2i)
+                                                        putBoolean("${prefix}track_wellness", trackWellness)
+                                                        putBoolean("${prefix}share_wellness", shareWellness)
                                                         if (date != null) {
                                                             putLong("${prefix}relationship_date", date)
                                                         }
                                                         if (profileUri != null) {
-                                                            putString("profile_pic_uri", profileUri.toString())
+                                                            putString("${prefix}profile_pic_uri", profileUri.toString())
+                                                            // Also save to internal storage for this specific profile
+                                                            com.lexnicholls.lovecounter.util.ProfileImageManager.saveToInternalStorage(context, profileUri, sharedId)
                                                         }
                                                         
                                                         val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -861,7 +881,15 @@ class MainActivity : ComponentActivity() {
                                                 onNavigateToMovies = { navController.navigate(Screen.Movies.name) },
                                                 onNavigateToDaily = { navController.navigate(Screen.DailyConnection.name) },
                                                 onNavigateToDrawing = { navController.navigate(Screen.Drawing.name) },
+                                                onNavigateToWellness = { navController.navigate(Screen.Wellness.name) },
                                                 onTriggerConfetti = { showConfetti = true }
+                                            )
+                                        }
+                                        composable(Screen.Wellness.name) {
+                                            WellnessScreen(
+                                                userId = sharedId ?: "",
+                                                userName = userName,
+                                                onBack = { navController.popBackStack() }
                                             )
                                         }
                                         composable(Screen.Drawing.name) {
@@ -1023,8 +1051,13 @@ class MainActivity : ComponentActivity() {
                                                     bgColor2 = c2
                                                     val prefix = if (sharedId != null) "rel_${sharedId}_" else ""
                                                     sharedPrefs.edit {
-                                                        putString("${prefix}bg_color_1", c1)
-                                                        putString("${prefix}bg_color_2", c2)
+                                                        if (c1 == null || c2 == null) {
+                                                            remove("${prefix}bg_color_1")
+                                                            remove("${prefix}bg_color_2")
+                                                        } else {
+                                                            putString("${prefix}bg_color_1", c1)
+                                                            putString("${prefix}bg_color_2", c2)
+                                                        }
                                                     }
                                                 },
                                                 onWidgetConfigsChange = { configs ->
@@ -1065,9 +1098,14 @@ class MainActivity : ComponentActivity() {
                                                         popUpTo(0) { inclusive = true }
                                                     }
                                                 },
-                                                onSyncQuestions = {
-                                                    loveViewModel.syncQuestionsToFirebase()
+                                                onNavigateToAdvanced = {
+                                                    navController.navigate(Screen.AdvancedSettings.name)
                                                 }
+                                            )
+                                        }
+                                        composable(Screen.AdvancedSettings.name) {
+                                            AdvancedSettingsScreen(
+                                                onBack = { navController.popBackStack() }
                                             )
                                         }
                                     }

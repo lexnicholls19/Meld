@@ -13,12 +13,15 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -50,23 +54,41 @@ import kotlin.math.sqrt
 fun ColorPickerDialog(
     initialColor1: Color,
     initialColor2: Color,
-    onColorsSelected: (Color, Color) -> Unit,
+    defaultColor1: Color,
+    defaultColor2: Color,
+    isUsingDefault: Boolean = false,
+    onColorsSelected: (Color?, Color?) -> Unit,
     onDismiss: () -> Unit
 ) {
     var color1 by remember { mutableStateOf(initialColor1) }
     var color2 by remember { mutableStateOf(initialColor2) }
     var selectingIndex by remember { mutableIntStateOf(0) } // 0 for color1, 1 for color2
+    var useDefault by remember { mutableStateOf(isUsingDefault) }
 
     val strings = t()
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = strings.customizeBackground,
-                fontWeight = FontWeight.Bold,
-                color = LovePink
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = strings.customizeBackground,
+                    fontWeight = FontWeight.Bold,
+                    color = LovePink,
+                    fontSize = 20.sp
+                )
+                IconButton(onClick = {
+                    color1 = defaultColor1
+                    color2 = defaultColor2
+                    useDefault = true
+                }) {
+                    Icon(Icons.Default.RestartAlt, contentDescription = strings.restore, tint = if (useDefault) LovePink else Color.Gray)
+                }
+            }
         },
         text = {
             Column(
@@ -82,25 +104,42 @@ fun ColorPickerDialog(
                 ) {
                     ColorSelectorTab(
                         label = strings.color1,
-                        isSelected = selectingIndex == 0,
+                        isSelected = !useDefault && selectingIndex == 0,
                         color = color1,
-                        onClick = { selectingIndex = 0 }
+                        onClick = { 
+                            selectingIndex = 0
+                            useDefault = false
+                        }
                     )
                     ColorSelectorTab(
                         label = strings.color2,
-                        isSelected = selectingIndex == 1,
+                        isSelected = !useDefault && selectingIndex == 1,
                         color = color2,
-                        onClick = { selectingIndex = 1 }
+                        onClick = { 
+                            selectingIndex = 1
+                            useDefault = false
+                        }
                     )
                 }
 
                 // El Picker principal
-                AdvancedColorPicker(
-                    initialColor = if (selectingIndex == 0) color1 else color2,
-                    onColorChange = {
-                        if (selectingIndex == 0) color1 = it else color2 = it
+                key(selectingIndex, useDefault) {
+                    if (useDefault) {
+                        Text(
+                            text = strings.system,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = FontStyle.Italic,
+                            modifier = Modifier.padding(vertical = 40.dp)
+                        )
+                    } else {
+                        AdvancedColorPicker(
+                            initialColor = if (selectingIndex == 0) color1 else color2,
+                            onColorChange = {
+                                if (selectingIndex == 0) color1 = it else color2 = it
+                            }
+                        )
                     }
-                )
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
@@ -116,7 +155,10 @@ fun ColorPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onColorsSelected(color1, color2) }) {
+            TextButton(onClick = { 
+                if (useDefault) onColorsSelected(null, null)
+                else onColorsSelected(color1, color2) 
+            }) {
                 Text(strings.save, fontWeight = FontWeight.Bold)
             }
         },
@@ -155,32 +197,49 @@ fun AdvancedColorPicker(
     initialColor: Color,
     onColorChange: (Color) -> Unit
 ) {
-    var hsv by remember(initialColor) {
+    // Mantenemos el estado HSV estable para evitar saltos de Hue a 0 al tocar negros/blancos
+    val hsvState = remember {
         val hsvArr = FloatArray(3)
         AndroidColor.colorToHSV(initialColor.toArgb(), hsvArr)
         mutableStateOf(Triple(hsvArr[0], hsvArr[1], hsvArr[2]))
     }
-    var alpha by remember(initialColor) { mutableFloatStateOf(initialColor.alpha) }
+    var alpha by remember { mutableFloatStateOf(initialColor.alpha) }
+
+    // Sincronizar si el color inicial cambia desde fuera (ej: presets)
+    LaunchedEffect(initialColor) {
+        val hsvArr = FloatArray(3)
+        AndroidColor.colorToHSV(initialColor.toArgb(), hsvArr)
+        val newHsv = Triple(hsvArr[0], hsvArr[1], hsvArr[2])
+        
+        val currentHsv = hsvState.value
+        val currentColorInt = Color.hsv(currentHsv.first, currentHsv.second, currentHsv.third, alpha).toArgb()
+        
+        if (currentColorInt != initialColor.toArgb()) {
+            hsvState.value = newHsv
+            alpha = initialColor.alpha
+        }
+    }
 
     val updateColor = {
-        onColorChange(Color.hsv(hsv.first, hsv.second, hsv.third, alpha))
+        val currentHsv = hsvState.value
+        onColorChange(Color.hsv(currentHsv.first, currentHsv.second, currentHsv.third, alpha))
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(240.dp)) {
             // Anillo exterior de Hue
-            HueRing(hue = hsv.first, onHueChange = {
-                hsv = hsv.copy(first = it)
+            HueRing(hue = hsvState.value.first, onHueChange = {
+                hsvState.value = hsvState.value.copy(first = it)
                 updateColor()
             })
             
-            // Círculo interior de Saturación y Valor
-            SaturationValueCircle(
-                hue = hsv.first,
-                saturation = hsv.second,
-                value = hsv.third,
+            // Círculo/Cuadrado interior de Saturación y Valor
+            SaturationValueArea(
+                hue = hsvState.value.first,
+                saturation = hsvState.value.second,
+                value = hsvState.value.third,
                 onSVChange = { s, v ->
-                    hsv = hsv.copy(second = s, third = v)
+                    hsvState.value = hsvState.value.copy(second = s, third = v)
                     updateColor()
                 }
             )
@@ -191,7 +250,7 @@ fun AdvancedColorPicker(
         // Barra de intensidad (Alpha)
         Text(text = "Intensidad", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start))
         AlphaSlider(
-            color = Color.hsv(hsv.first, hsv.second, hsv.third),
+            color = Color.hsv(hsvState.value.first, hsvState.value.second, hsvState.value.third),
             alpha = alpha,
             onAlphaChange = {
                 alpha = it
@@ -207,7 +266,8 @@ fun AdvancedColorPicker(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val colorInt = Color.hsv(hsv.first, hsv.second, hsv.third, alpha).toArgb()
+            val currentHsv = hsvState.value
+            val colorInt = Color.hsv(currentHsv.first, currentHsv.second, currentHsv.third, alpha).toArgb()
             val hex = String.format("#%08X", colorInt)
             
             Surface(
@@ -247,10 +307,17 @@ fun HueRing(hue: Float, onHueChange: (Float) -> Unit) {
         .pointerInput(Unit) {
             detectDragGestures { change, _ ->
                 val center = Offset(size.width / 2f, size.height / 2f)
-                val angle = atan2(change.position.y - center.y, change.position.x - center.x)
-                var newHue = (angle * 180f / PI.toFloat())
-                if (newHue < 0) newHue += 360f
-                onHueChange(newHue)
+                val pos = change.position
+                val dist = sqrt((pos.x - center.x).pow(2) + (pos.y - center.y).pow(2))
+                
+                // Solo reaccionar si el toque está en el área del anillo (ancho ~30dp)
+                // Inicia aprox a los 85dp del centro
+                if (dist > 80.dp.toPx()) {
+                    val angle = atan2(pos.y - center.y, pos.x - center.x)
+                    var newHue = (angle * 180f / PI.toFloat())
+                    if (newHue < 0) newHue += 360f
+                    onHueChange(newHue)
+                }
             }
         }
     ) {
@@ -264,8 +331,8 @@ fun HueRing(hue: Float, onHueChange: (Float) -> Unit) {
                 strokeWidth = thickness
                 shader = SweepGradient(size.width / 2f, size.height / 2f, 
                     intArrayOf(
-                        AndroidColor.RED, AndroidColor.MAGENTA, AndroidColor.BLUE, 
-                        AndroidColor.CYAN, AndroidColor.GREEN, AndroidColor.YELLOW, AndroidColor.RED
+                        AndroidColor.RED, AndroidColor.YELLOW, AndroidColor.GREEN, 
+                        AndroidColor.CYAN, AndroidColor.BLUE, AndroidColor.MAGENTA, AndroidColor.RED
                     ), null)
             }
             canvas.nativeCanvas.drawCircle(size.width / 2f, size.height / 2f, radius - thickness / 2f, paint)
@@ -289,68 +356,94 @@ fun HueRing(hue: Float, onHueChange: (Float) -> Unit) {
 }
 
 @Composable
-fun SaturationValueCircle(hue: Float, saturation: Float, value: Float, onSVChange: (Float, Float) -> Unit) {
-    Canvas(modifier = Modifier
-        .size(160.dp)
-        .clip(CircleShape)
-        .pointerInput(Unit) {
-            detectDragGestures { change, _ ->
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val dx = (change.position.x - center.x) / (size.width / 2f)
-                val dy = (change.position.y - center.y) / (size.height / 2f)
+fun SaturationValueArea(hue: Float, saturation: Float, value: Float, onSVChange: (Float, Float) -> Unit) {
+    // Definimos el tamaño fijo para cálculos consistentes
+    val sizeDp = 160.dp
+    
+    Box(
+        modifier = Modifier
+            .size(sizeDp)
+            .pointerInput(Unit) {
+                // Usamos un scope de bajo nivel para evitar el "touch slop" (demora inicial)
+                // y permitir que el selector responda desde el primer milisegundo.
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitFirstDown()
+                        val update = { pos: Offset ->
+                            val s = (pos.x / size.width).coerceIn(0f, 1f)
+                            val v = (1f - (pos.y / size.height)).coerceIn(0f, 1f)
+                            onSVChange(s, v)
+                        }
+                        
+                        update(event.position)
+                        
+                        drag(event.id) { change ->
+                            update(change.position)
+                            change.consume()
+                        }
+                    }
+                }
+            }
+    ) {
+        // El círculo visual: lo dibujamos dentro de la caja táctil
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = CircleShape,
+            color = Color.Black
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val radius = size.width / 2f
+                val hsvColor = AndroidColor.HSVToColor(floatArrayOf(hue, 1f, 1f))
                 
-                // Mapeo simple: X -> Saturation, Y -> Value (invertido)
-                // Para que se mantenga dentro del círculo, limitamos por radio
-                val dist = sqrt(dx * dx + dy * dy).coerceAtMost(1f)
-                
-                val newS = dist
-                val newV = (1f - dy).coerceIn(0f, 1f) // Aproximación visual
-                
-                onSVChange(newS, newV)
+                drawIntoCanvas { canvas ->
+                    // 1. Color base (Matiz)
+                    canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
+                        color = hsvColor
+                        isAntiAlias = true
+                    })
+                    
+                    // 2. Gradiente de Saturación (Blanco -> Transparente)
+                    val whiteGradient = LinearGradient(0f, 0f, size.width, 0f, AndroidColor.WHITE, AndroidColor.TRANSPARENT, Shader.TileMode.CLAMP)
+                    canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
+                        shader = whiteGradient
+                        isAntiAlias = true
+                    })
+                    
+                    // 3. Gradiente de Brillo (Transparente -> Negro)
+                    val blackGradient = LinearGradient(0f, 0f, 0f, size.height, AndroidColor.TRANSPARENT, AndroidColor.BLACK, Shader.TileMode.CLAMP)
+                    canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
+                        shader = blackGradient
+                        isAntiAlias = true
+                    })
+                }
             }
         }
-    ) {
-        val radius = size.width / 2f
         
-        drawIntoCanvas { canvas ->
-            val hsvColor = AndroidColor.HSVToColor(floatArrayOf(hue, 1f, 1f))
-            
-            // Simular el picker de la imagen:
-            // 1. Fondo del color Hue saturado
-            canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
-                color = hsvColor
-                isAntiAlias = true
-            })
-            
-            // 2. Gradiente blanco (Saturación) de izquierda a derecha (o radial)
-            val whiteGradient = LinearGradient(0f, 0f, size.width, 0f, AndroidColor.WHITE, AndroidColor.TRANSPARENT, Shader.TileMode.CLAMP)
-            canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
-                shader = whiteGradient
-                isAntiAlias = true
-            })
-            
-            // 3. Gradiente negro (Valor) de abajo a arriba
-            val blackGradient = LinearGradient(0f, size.height, 0f, 0f, AndroidColor.BLACK, AndroidColor.TRANSPARENT, Shader.TileMode.CLAMP)
-            canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
-                shader = blackGradient
-                isAntiAlias = true
-            })
+        // Indicador de selección: Calculamos su posición restringida al círculo visual
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val sizePx = with(density) { sizeDp.toPx() }
+        val radiusPx = sizePx / 2f
+        
+        // Posición teórica en un plano cuadrado
+        val rawX = saturation * sizePx
+        val rawY = (1f - value) * sizePx
+        
+        // Proyectamos la posición al círculo para que el indicador nunca se salga visualmente
+        val dx = rawX - radiusPx
+        val dy = rawY - radiusPx
+        val dist = sqrt(dx*dx + dy*dy)
+        
+        val finalX = if (dist <= radiusPx) rawX else radiusPx + (dx / dist) * radiusPx
+        val finalY = if (dist <= radiusPx) rawY else radiusPx + (dy / dist) * radiusPx
+        
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = Color.White,
+                radius = 8.dp.toPx(),
+                center = Offset(finalX, finalY),
+                style = Stroke(width = 3.dp.toPx())
+            )
         }
-        
-        // Indicador - Para este mapeo simple:
-        // Buscamos una posición que represente S y V
-        // Como es un círculo, es mejor usar un mapeo cuadrado y clipear, 
-        // pero el usuario pidió un círculo.
-        // Usemos una posición fija basada en el S y V actuales (aproximado)
-        val indicatorX = radius + (saturation * radius * 0.5f) // Muy aproximado
-        val indicatorY = radius + ((0.5f - value) * radius) // Muy aproximado
-        
-        drawCircle(
-            color = Color.White,
-            radius = 8.dp.toPx(),
-            center = Offset(indicatorX.coerceIn(0f, size.width), indicatorY.coerceIn(0f, size.height)),
-            style = Stroke(width = 2.dp.toPx())
-        )
     }
 }
 

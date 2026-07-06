@@ -4,8 +4,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -60,8 +59,8 @@ fun SettingsScreen(
     currentLanguage: String,
     currentVisibleCategories: Set<String>,
     currentRelationshipDate: Long?,
-    currentBgColor1: String,
-    currentBgColor2: String,
+    currentBgColor1: String?,
+    currentBgColor2: String?,
     onThemeChange: (ThemeMode) -> Unit,
     onNameChange: (String) -> Unit,
     onMainTitleChange: (String) -> Unit,
@@ -73,9 +72,9 @@ fun SettingsScreen(
     onCurrencyChange: (String) -> Unit,
     onRelationshipDateChange: (Long?) -> Unit,
     onFabMessagesChange: (String, String, String, String) -> Unit,
-    onBackgroundColorsChange: (String, String) -> Unit,
+    onBackgroundColorsChange: (String?, String?) -> Unit,
     onLogout: () -> Unit,
-    onSyncQuestions: () -> Unit = {}
+    onNavigateToAdvanced: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val strings = t()
@@ -117,36 +116,34 @@ fun SettingsScreen(
     var showLinkDialog by remember { mutableStateOf(false) }
     var showRelationDetailsDialog by remember { mutableStateOf(false) }
     var inputCode by remember { mutableStateOf(TextFieldValue("")) }
-
-    var showDeleteCategoryConfirm by remember { mutableStateOf<String?>(null) }
+    var showColorPickerDialog by remember { mutableStateOf(false) }
     val cinemaViewModel: com.lexnicholls.lovecounter.viewmodel.CinemaViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
     val members by loveViewModel.members
     
-    var profilePicUri by remember { 
+    var profilePicUri by remember(sharedId) { 
         mutableStateOf<Any?>(
-            ProfileImageManager.getLocalProfileFile(context) ?: 
-            sharedPrefs.getString("profile_pic_uri", null)?.let { Uri.parse(it) } ?:
+            ProfileImageManager.getLocalProfileFile(context, sharedId) ?: 
+            sharedPrefs.getString("${prefix}profile_pic_uri", null)?.let { Uri.parse(it) } ?:
             currentUserProfile?.profilePicUrl
         )
     }
 
-    LaunchedEffect(currentUserProfile?.profilePicUrl) {
+    LaunchedEffect(currentUserProfile?.profilePicUrl, sharedId) {
         if (profilePicUri == null || profilePicUri is String) {
-            profilePicUri = ProfileImageManager.getLocalProfileFile(context) ?: currentUserProfile?.profilePicUrl
+            profilePicUri = ProfileImageManager.getLocalProfileFile(context, sharedId) ?: currentUserProfile?.profilePicUrl
         }
     }
-    var showProfileMenu by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             profilePicUri = it
-            sharedPrefs.edit().putString("profile_pic_uri", it.toString()).apply()
-            ProfileImageManager.saveToInternalStorage(context, it)
-            scope.launch { ProfileImageManager.uploadToCloud(context, it) }
+            sharedPrefs.edit().putString("${prefix}profile_pic_uri", it.toString()).apply()
+            ProfileImageManager.saveToInternalStorage(context, it, sharedId)
+            scope.launch { ProfileImageManager.uploadToCloud(context, it, sharedId) }
         }
     }
 
@@ -158,88 +155,93 @@ fun SettingsScreen(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
         
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Text(
+            text = strings.settings,
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 16.dp, start = 8.dp)
+        )
+
+        // --- SECCIÓN: PERFIL HERO ---
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
         ) {
-            Text(
-                text = strings.settings,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold
-            )
-            
-            // Profile Picture Circle
-            Box {
-                Surface(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .border(2.dp, LovePink, CircleShape)
-                        .clickable { showProfileMenu = true },
-                    color = MaterialTheme.colorScheme.surfaceVariant
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Profile Picture Circle
+                Box(
+                    modifier = Modifier.clickable { imagePickerLauncher.launch("image/*") }
                 ) {
-                    if (profilePicUri != null) {
-                        AsyncImage(
-                            model = profilePicUri,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
+                    Surface(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .border(3.dp, LovePink, CircleShape),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        if (profilePicUri != null) {
+                            AsyncImage(
+                                model = profilePicUri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                modifier = Modifier.padding(16.dp),
+                                tint = Color.Gray
+                            )
+                        }
+                    }
+                    
+                    // Small Edit Icon Overlay
+                    Surface(
+                        modifier = Modifier.size(26.dp).align(Alignment.BottomEnd),
+                        shape = CircleShape,
+                        color = LovePink,
+                        shadowElevation = 4.dp
+                    ) {
                         Icon(
-                            Icons.Default.Person,
+                            Icons.Default.PhotoCamera,
                             contentDescription = null,
-                            modifier = Modifier.padding(12.dp),
-                            tint = Color.Gray
+                            modifier = Modifier.padding(6.dp),
+                            tint = Color.White
                         )
                     }
                 }
                 
-                DropdownMenu(
-                    expanded = showProfileMenu,
-                    onDismissRequest = { showProfileMenu = false }
-                ) {
+                Spacer(modifier = Modifier.width(20.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = tempName.ifBlank { strings.userName },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                     val userEmail = FirebaseAuth.getInstance().currentUser?.email
                     if (!userEmail.isNullOrBlank()) {
                         Text(
                             text = userEmail,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = LovePink
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     }
-
-                    DropdownMenuItem(
-                        text = { Text(strings.changeProfilePic) },
-                        leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null) },
-                        onClick = {
-                            showProfileMenu = false
-                            imagePickerLauncher.launch("image/*")
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(strings.changeActiveProfile) },
-                        leadingIcon = { Icon(Icons.Default.SwitchAccount, contentDescription = null) },
-                        onClick = {
-                            showProfileMenu = false
-                            showSwitchProfileDialog = true
-                        }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    DropdownMenuItem(
-                        text = { Text(strings.logout, color = MaterialTheme.colorScheme.error) },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                        onClick = {
-                            showProfileMenu = false
-                            FirebaseAuth.getInstance().signOut()
-                            onLogout()
-                        }
-                    )
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // --- SECCIÓN: PAREJA Y ENLACE ---
         SettingsGroup(title = strings.relation) {
@@ -257,14 +259,22 @@ fun SettingsScreen(
                 icon = Icons.AutoMirrored.Filled.Label,
                 placeholder = strings.relation
             )
+            
+            SettingsClickableRow(
+                label = strings.changeActiveProfile,
+                value = relationName,
+                icon = Icons.Default.SwitchAccount,
+                onClick = { showSwitchProfileDialog = true }
+            )
+
+            SettingsClickableRow(
+                label = strings.relationStatus,
+                value = if (relationId != null && members.size > 1) strings.linkedStatus.format(members.size) else "Personal",
+                icon = Icons.Default.Groups,
+                onClick = { showRelationDetailsDialog = true }
+            )
 
             if (relationId != null) {
-                SettingsClickableRow(
-                    label = strings.relationStatus,
-                    value = strings.linkedStatus.format(members.size),
-                    icon = Icons.Default.Groups,
-                    onClick = { showRelationDetailsDialog = true }
-                )
                 Button(
                     onClick = { loveViewModel.unlinkPartner() },
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -273,42 +283,7 @@ fun SettingsScreen(
                     val isAlone = members.size <= 1
                     Text(if (isAlone) strings.deleteProfile else strings.unlinkPartner)
                 }
-            } else {
-                SettingsClickableRow(
-                    label = strings.linkWithPartner,
-                    value = if (linkingCode != null) {
-                        val formatted = linkingCode?.chunked(4)?.joinToString("-") ?: ""
-                        "${strings.linkingCodeLabel.replace(":", "")} $formatted"
-                    } else strings.generateCode,
-                    icon = Icons.Default.Link,
-                    onClick = { 
-                        if (linkingCode == null) loveViewModel.generateLinkingCode()
-                        else {
-                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            val clip = android.content.ClipData.newPlainText("Código de Enlace", linkingCode)
-                            clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, strings.codeCopied, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-                if (linkingCode != null) {
-                    TextButton(
-                        onClick = { loveViewModel.generateLinkingCode() },
-                        modifier = Modifier.align(Alignment.End).padding(end = 8.dp)
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(strings.generateAnotherCode, fontSize = 12.sp)
-                    }
-                }
             }
-            
-            SettingsClickableRow(
-                label = strings.haveCode,
-                value = strings.enterPartnerCode,
-                icon = Icons.Default.QrCodeScanner,
-                onClick = { showLinkDialog = true }
-            )
         }
 
         // --- SECCIÓN: PERFIL Y PERSONALIZACIÓN ---
@@ -400,7 +375,12 @@ fun SettingsScreen(
             val datePickerState = key(sharedId) {
                 rememberDatePickerState(
                     initialSelectedDateMillis = currentRelationshipDate,
-                    yearRange = 1900..2100
+                    yearRange = 1900..java.time.LocalDate.now().year,
+                    selectableDates = object : SelectableDates {
+                        override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                            return utcTimeMillis <= System.currentTimeMillis()
+                        }
+                    }
                 )
             }
 
@@ -439,30 +419,37 @@ fun SettingsScreen(
                 onDelete = { onRelationshipDateChange(null) }
             )
 
-            // Background Colors
-            var showColorPickerDialog by remember { mutableStateOf(false) }
-
-            if (showColorPickerDialog) {
-                com.lexnicholls.lovecounter.ui.components.ColorPickerDialog(
-                    initialColor1 = Color(android.graphics.Color.parseColor(currentBgColor1)),
-                    initialColor2 = Color(android.graphics.Color.parseColor(currentBgColor2)),
-                    onColorsSelected = { c1, c2 ->
-                        onBackgroundColorsChange(
-                            String.format("#%08X", c1.toArgb()),
-                            String.format("#%08X", c2.toArgb())
-                        )
-                        showColorPickerDialog = false
-                    },
-                    onDismiss = { showColorPickerDialog = false }
-                )
-            }
-
             SettingsClickableRow(
                 label = strings.backgroundColors,
                 value = strings.customizeBackground,
                 icon = Icons.Default.Palette,
                 onClick = { showColorPickerDialog = true }
             )
+        }
+
+        // --- SECCIÓN: BIENESTAR ---
+        SettingsGroup(title = strings.wellness) {
+            SettingsSwitchRow(
+                label = strings.trackPeriodQuestion,
+                subtitle = strings.wellnessDesc,
+                checked = currentUserProfile?.trackWellness ?: false,
+                onCheckedChange = { 
+                    loveViewModel.updateWellnessPreferences(it, currentUserProfile?.shareWellness ?: false) 
+                },
+                icon = Icons.Default.Favorite
+            )
+            
+            if (currentUserProfile?.trackWellness == true) {
+                SettingsSwitchRow(
+                    label = strings.shareWellnessQuestion,
+                    subtitle = if (currentUserProfile?.shareWellness == true) strings.yes else strings.cancel,
+                    checked = currentUserProfile?.shareWellness ?: false,
+                    onCheckedChange = { 
+                        loveViewModel.updateWellnessPreferences(currentUserProfile?.trackWellness ?: true, it) 
+                    },
+                    icon = Icons.Default.Share
+                )
+            }
         }
 
         // --- SECCIÓN: APARIENCIA ---
@@ -560,6 +547,9 @@ fun SettingsScreen(
         }
 
         // --- SECCIÓN: SISTEMA ---
+        var showChangePasswordDialog by remember { mutableStateOf(false) }
+        var showDeleteAccountDialog by remember { mutableStateOf(false) }
+
         SettingsGroup(title = strings.system) {
             // Moneda
             SettingsDropdownRow(
@@ -577,6 +567,20 @@ fun SettingsScreen(
                     )
                 }
             }
+            
+            SettingsClickableRow(
+                label = strings.changePassword,
+                value = "********",
+                icon = Icons.Default.Lock,
+                onClick = { showChangePasswordDialog = true }
+            )
+            
+            SettingsClickableRow(
+                label = strings.deleteAccount,
+                value = strings.delete,
+                icon = Icons.Default.DeleteForever,
+                onClick = { showDeleteAccountDialog = true }
+            )
         }
 
         // --- SECCIÓN: CUENTA Y ADMIN ---
@@ -586,20 +590,121 @@ fun SettingsScreen(
         if (currentUserId in privateUserIds) {
             SettingsGroup(title = strings.admin) {
                 SettingsClickableRow(
-                    label = strings.syncData,
-                    value = strings.updateFirebase,
-                    icon = Icons.Default.CloudSync,
-                    onClick = {
-                        onSyncQuestions()
-                        Toast.makeText(context, strings.synchronizing, Toast.LENGTH_SHORT).show()
-                    }
+                    label = strings.advancedConfig,
+                    value = strings.details,
+                    icon = Icons.Default.SettingsSuggest,
+                    onClick = onNavigateToAdvanced
                 )
             }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // BOTÓN CERRAR SESIÓN
+        Button(
+            onClick = {
+                FirebaseAuth.getInstance().signOut()
+                onLogout()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                contentColor = MaterialTheme.colorScheme.error
+            ),
+            shape = RoundedCornerShape(20.dp),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+            Spacer(Modifier.width(12.dp))
+            Text(strings.logout, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
 
         Spacer(modifier = Modifier.height(48.dp))
 
         // --- DIÁLOGOS ---
+        if (showChangePasswordDialog) {
+            var newPass by remember { mutableStateOf("") }
+            var confirmPass by remember { mutableStateOf("") }
+            
+            com.lexnicholls.lovecounter.ui.components.LoveAlertDialog(
+                onDismissRequest = { showChangePasswordDialog = false },
+                title = strings.changePassword,
+                onConfirm = {
+                    if (newPass == confirmPass && newPass.length >= 6) {
+                        loveViewModel.changePassword(newPass) {
+                            showChangePasswordDialog = false
+                        }
+                    } else if (newPass != confirmPass) {
+                        Toast.makeText(context, strings.passwordsDontMatch, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, strings.invalidEmailOrPassword, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            ) {
+                Column {
+                    OutlinedTextField(
+                        value = newPass,
+                        onValueChange = { newPass = it },
+                        label = { Text(strings.newPassword) },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                            autoCorrect = false
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = confirmPass,
+                        onValueChange = { confirmPass = it },
+                        label = { Text(strings.confirmPassword) },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                            autoCorrect = false
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+        }
+
+        if (showDeleteAccountDialog) {
+            var confirmText by remember { mutableStateOf("") }
+            val deleteKeyword = strings.delete
+            
+            com.lexnicholls.lovecounter.ui.components.LoveAlertDialog(
+                onDismissRequest = { showDeleteAccountDialog = false },
+                title = strings.deleteAccount,
+                confirmButtonText = strings.delete,
+                onConfirm = {
+                    if (confirmText.equals(deleteKeyword, ignoreCase = true)) {
+                        loveViewModel.deleteAccount {
+                            onLogout()
+                        }
+                        showDeleteAccountDialog = false
+                    }
+                },
+                enabledConfirm = confirmText.equals(deleteKeyword, ignoreCase = true)
+            ) {
+                Column {
+                    Text(strings.deleteAccountDesc)
+                    Spacer(Modifier.height(16.dp))
+                    Text(strings.typeDeleteToConfirm.replace("Delete", deleteKeyword), fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = confirmText,
+                        onValueChange = { confirmText = it },
+                        placeholder = { Text(deleteKeyword) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
         if (showSwitchProfileDialog) {
             AlertDialog(
                 onDismissRequest = { showSwitchProfileDialog = false },
@@ -634,15 +739,17 @@ fun SettingsScreen(
                                 Spacer(Modifier.width(4.dp))
                                 Text(strings.createProfile, fontSize = 12.sp)
                             }
-                            TextButton(
-                                onClick = { 
-                                    showSwitchProfileDialog = false
-                                    showLinkDialog = true 
+                            if (relationId == null) {
+                                TextButton(
+                                    onClick = { 
+                                        showSwitchProfileDialog = false
+                                        showLinkDialog = true 
+                                    }
+                                ) {
+                                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(strings.joinWithCode, fontSize = 12.sp)
                                 }
-                            ) {
-                                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text(strings.joinWithCode, fontSize = 12.sp)
                             }
                         }
                     }
@@ -656,6 +763,7 @@ fun SettingsScreen(
         }
 
         if (showCreateProfileDialog) {
+            var linkingCodeInput by remember { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = { showCreateProfileDialog = false },
                 title = { Text(strings.createProfile) },
@@ -668,13 +776,26 @@ fun SettingsScreen(
                             placeholder = { Text("Ej: Familia, Amigos...") },
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(Modifier.height(16.dp))
+                        Text(strings.haveCode + " (" + strings.optional + ")", fontSize = 14.sp, color = Color.Gray)
+                        OutlinedTextField(
+                            value = linkingCodeInput,
+                            onValueChange = { 
+                                val digits = it.filter { c -> c.isDigit() }
+                                linkingCodeInput = if (digits.length > 16) digits.take(16) else digits 
+                            },
+                            placeholder = { Text("1234-5678-...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                        )
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        if (newProfileName.isNotBlank()) {
-                            loveViewModel.createProfile(newProfileName)
+                        if (newProfileName.isNotBlank() || linkingCodeInput.length == 16) {
+                            loveViewModel.createProfile(newProfileName, linkingCodeInput.ifBlank { null })
                             newProfileName = ""
+                            linkingCodeInput = ""
                             showCreateProfileDialog = false
                         }
                     }) {
@@ -682,7 +803,11 @@ fun SettingsScreen(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showCreateProfileDialog = false }) {
+                    TextButton(onClick = { 
+                        showCreateProfileDialog = false
+                        newProfileName = ""
+                        linkingCodeInput = ""
+                    }) {
                         Text(strings.cancel)
                     }
                 }
@@ -727,19 +852,59 @@ fun SettingsScreen(
                 title = { Text(strings.relationDetails) },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(strings.members, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-                        members.forEach { member ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = LovePink)
-                                Spacer(Modifier.width(8.dp))
-                                Text(if (member.name.isNotBlank()) member.name else strings.unnamedUser)
-                            }
-                        }
+                        val isLinked = relationId != null && members.size > 1
                         
-                        com.lexnicholls.lovecounter.ui.components.HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        if (isLinked) {
+                            Text(strings.members, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                            members.forEach { member ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val isMe = member.uid == FirebaseAuth.getInstance().currentUser?.uid
+                                    val picModel = if (isMe) {
+                                        ProfileImageManager.getBestProfileUri(context, member.profilePicUrl, sharedId)
+                                    } else {
+                                        member.profilePicUrl
+                                    }
+
+                                    Surface(
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(CircleShape)
+                                            .border(2.dp, LovePink, CircleShape),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        if (picModel != null) {
+                                            AsyncImage(
+                                                model = picModel,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(
+                                                Icons.Default.Person,
+                                                contentDescription = null,
+                                                modifier = Modifier.padding(12.dp),
+                                                tint = Color.Gray
+                                            )
+                                        }
+                                    }
+                                    
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = if (member.name.isNotBlank()) member.name else strings.unnamedUser,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            com.lexnicholls.lovecounter.ui.components.HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+                        } else {
+                            Text("Perfil Personal", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+                            Text("Este perfil no está vinculado a una relación todavía. Puedes generar un código para que alguien se una, o ingresar el código de otra persona.", fontSize = 14.sp)
+                            Spacer(Modifier.height(16.dp))
+                        }
                         
                         Text(strings.linkingCodeLabel, fontWeight = FontWeight.Bold)
                         val codeToShow = linkingCode ?: strings.noCodeGenerated
@@ -786,6 +951,24 @@ fun SettingsScreen(
                             }
                         }
                         Text(strings.shareCodeDesc, fontSize = 12.sp, color = Color.Gray)
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { 
+                                showRelationDetailsDialog = false
+                                showLinkDialog = true 
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(strings.joinWithCode)
+                        }
                     }
                 },
                 confirmButton = {
@@ -802,7 +985,7 @@ fun SettingsScreen(
                 title = { Text(strings.visibleCategoriesLabel) },
                 text = {
                     Column {
-                        val categories = listOf(
+                        val categories = mutableListOf(
                             "reminders" to strings.reminders,
                             "dates" to strings.dates,
                             "market" to strings.market,
@@ -811,26 +994,35 @@ fun SettingsScreen(
                             "movies" to strings.movies,
                             "daily" to strings.daily
                         )
+                        
+                        val someoneTracksAndShares = members.any { 
+                            it.trackWellness && (it.uid == currentUserId || it.shareWellness)
+                        }
+                        if (someoneTracksAndShares) {
+                            categories.add("wellness" to strings.wellness)
+                        }
+
                         categories.forEach { (id, label) ->
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable {
-                                    if (currentVisibleCategories.contains(id)) {
-                                        // Si estamos desactivando una categoría, mostramos advertencia
-                                        showDeleteCategoryConfirm = id
+                                    val newSet = if (currentVisibleCategories.contains(id)) {
+                                        currentVisibleCategories - id
                                     } else {
-                                        onVisibleCategoriesChange(currentVisibleCategories + id)
+                                        currentVisibleCategories + id
                                     }
+                                    onVisibleCategoriesChange(newSet)
                                 },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
                                     checked = currentVisibleCategories.contains(id),
                                     onCheckedChange = { isChecked ->
-                                        if (!isChecked) {
-                                            showDeleteCategoryConfirm = id
+                                        val newSet = if (isChecked) {
+                                            currentVisibleCategories + id
                                         } else {
-                                            onVisibleCategoriesChange(currentVisibleCategories + id)
+                                            currentVisibleCategories - id
                                         }
+                                        onVisibleCategoriesChange(newSet)
                                     }
                                 )
                                 Text(label)
@@ -842,51 +1034,7 @@ fun SettingsScreen(
             )
         }
 
-        if (showDeleteCategoryConfirm != null) {
-            val categoryId = showDeleteCategoryConfirm!!
-            val categoryName = when(categoryId) {
-                "reminders" -> strings.reminders
-                "dates" -> strings.dates
-                "market" -> strings.market
-                "bucket" -> strings.bucket
-                "drawing" -> strings.drawing
-                "movies" -> strings.movies
-                "daily" -> strings.daily
-                else -> categoryId
-            }
-            
-            AlertDialog(
-                onDismissRequest = { showDeleteCategoryConfirm = null },
-                title = { Text(strings.delete + " " + categoryName) },
-                text = { Text(strings.deleteCategoryWarning) },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            // 1. Eliminar registros de la base de datos si es necesario
-                            if (categoryId == "movies") {
-                                // Para películas el usuario mencionó específicamente borrar registros
-                                cinemaViewModel.removeMoviesByCategory(userId, "Series")
-                                cinemaViewModel.removeMoviesByCategory(userId, "Películas")
-                                // También manejamos categorías personalizadas si existieran, 
-                                // pero según la UI son "Series" y "Películas"
-                            }
-                            
-                            // 2. Ocultar categoría
-                            onVisibleCategoriesChange(currentVisibleCategories - categoryId)
-                            showDeleteCategoryConfirm = null
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text(strings.yes)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteCategoryConfirm = null }) {
-                        Text(strings.cancel)
-                    }
-                }
-            )
-        }
+
 
         if (showWidgetDialog) {
             AlertDialog(
@@ -964,6 +1112,45 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+
+        if (showColorPickerDialog) {
+            val isDark = when (currentTheme) {
+                ThemeMode.Dark -> true
+                ThemeMode.Light -> false
+                ThemeMode.System -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+            val def1 = if (isDark) Color(0xFF0F172A) else Color(0xFFEBE3FF)
+            val def2 = if (isDark) Color(0xFF4C0519) else Color(0xFFFFD9E2)
+
+            val c1 = try { 
+                if (currentBgColor1 != null) Color(android.graphics.Color.parseColor(currentBgColor1)) 
+                else def1 
+            } catch (e: Exception) { def1 }
+            val c2 = try { 
+                if (currentBgColor2 != null) Color(android.graphics.Color.parseColor(currentBgColor2)) 
+                else def2 
+            } catch (e: Exception) { def2 }
+
+            com.lexnicholls.lovecounter.ui.components.ColorPickerDialog(
+                initialColor1 = c1,
+                initialColor2 = c2,
+                defaultColor1 = def1,
+                defaultColor2 = def2,
+                isUsingDefault = currentBgColor1 == null,
+                onColorsSelected = { color1, color2 ->
+                    if (color1 == null || color2 == null) {
+                        onBackgroundColorsChange(null, null)
+                    } else {
+                        onBackgroundColorsChange(
+                            String.format("#%08X", color1.toArgb()),
+                            String.format("#%08X", color2.toArgb())
+                        )
+                    }
+                    showColorPickerDialog = false
+                },
+                onDismiss = { showColorPickerDialog = false }
+            )
         }
     }
 }

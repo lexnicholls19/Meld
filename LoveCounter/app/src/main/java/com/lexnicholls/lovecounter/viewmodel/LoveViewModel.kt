@@ -1,6 +1,7 @@
 package com.lexnicholls.lovecounter.viewmodel
 
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
@@ -24,7 +25,12 @@ data class User(
     val deviceId: String = "",
     val relationId: String? = null,
     val relationIds: List<String> = emptyList(),
-    val profilePicUrl: String? = null
+    val profilePicUrl: String? = null,
+    val trackWellness: Boolean = false,
+    val shareWellness: Boolean = false,
+    val lastPeriodStart: Timestamp? = null,
+    val cycleLength: Int = 28,
+    val periodDuration: Int = 5
 )
 
 @HiltViewModel
@@ -449,27 +455,59 @@ class LoveViewModel @Inject constructor(
         }
     }
 
-    fun createProfile(name: String) {
+    fun createProfile(name: String, linkingCode: String? = null) {
         val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return
         viewModelScope.launch {
             try {
-                val newRelationId = java.util.UUID.randomUUID().toString()
+                _isLinking.value = true
                 val batch = db.batch()
+                var targetRelationId: String? = null
                 
-                // Crear documento de relación
-                batch.set(db.collection("relations").document(newRelationId), mapOf("name" to name))
+                if (!linkingCode.isNullOrBlank()) {
+                    val result = db.collection("linking_codes").document(linkingCode).get().await()
+                    if (result.exists()) {
+                        targetRelationId = result.getString("relationId")
+                        val creatorUid = result.getString("userId")
+                        
+                        if (creatorUid == currentUserId) {
+                            _syncStatus.value = "No puedes usar tu propio código"
+                            _isLinking.value = false
+                            return@launch
+                        }
+
+                        // Si el creador aún no tenía una relación formal (legacy), se la asignamos aquí también
+                        if (creatorUid != null && targetRelationId != null) {
+                            batch.set(db.collection("users").document(creatorUid), mapOf(
+                                "relationId" to targetRelationId,
+                                "relationIds" to com.google.firebase.firestore.FieldValue.arrayUnion(targetRelationId)
+                            ), SetOptions.merge())
+                        }
+                    } else {
+                        _syncStatus.value = "Código inválido o expirado"
+                        _isLinking.value = false
+                        return@launch
+                    }
+                }
+
+                if (targetRelationId == null) {
+                    // Si no hay código, creamos una nueva relación (Perfil Personal)
+                    targetRelationId = java.util.UUID.randomUUID().toString()
+                    batch.set(db.collection("relations").document(targetRelationId), mapOf("name" to name))
+                }
                 
-                // Actualizar usuario
+                // Unir al usuario actual a la relación (nueva o existente)
                 batch.set(db.collection("users").document(currentUserId), mapOf(
-                    "relationId" to newRelationId,
-                    "relationIds" to com.google.firebase.firestore.FieldValue.arrayUnion(newRelationId)
+                    "relationId" to targetRelationId,
+                    "relationIds" to com.google.firebase.firestore.FieldValue.arrayUnion(targetRelationId)
                 ), SetOptions.merge())
                 
                 batch.commit().await()
-                _syncStatus.value = "Perfil creado: $name"
+                _syncStatus.value = if (linkingCode.isNullOrBlank()) "Perfil creado: $name" else "¡Vinculado con éxito!"
             } catch (e: Exception) {
-                Log.e("Profile", "Error creating profile", e)
-                _syncStatus.value = "Error al crear perfil"
+                Log.e("Profile", "Error creating/linking profile", e)
+                _syncStatus.value = "Error: ${e.message}"
+            } finally {
+                _isLinking.value = false
             }
         }
     }
@@ -551,6 +589,109 @@ class LoveViewModel @Inject constructor(
         val updates = mutableMapOf<String, Any>("name" to name)
         profilePicUrl?.let { updates["profilePicUrl"] = it }
         db.collection("users").document(uid).update(updates)
+    }
+
+    fun updateWellnessPreferences(track: Boolean, share: Boolean) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        db.collection("users").document(uid).update(mapOf(
+            "trackWellness" to track,
+            "shareWellness" to share
+        ))
+    }
+
+    fun updateWellnessData(lastPeriodStart: Timestamp?, cycleLength: Int, periodDuration: Int) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        db.collection("users").document(uid).update(mapOf(
+            "lastPeriodStart" to lastPeriodStart,
+            "cycleLength" to cycleLength,
+            "periodDuration" to periodDuration
+        ))
+    }
+
+    fun deleteAccount(onSuccess: () -> Unit) {
+        val currentUser = FirebaseAuth.getInstance().currentUser ?: return
+        val currentUserId = currentUser.uid
+        val relationIds = _relationIds.value
+
+        viewModelScope.launch {
+            try {
+                _isRefreshing.value = true
+                val batch = db.batch()
+
+                // 1. Eliminar de todas las relaciones
+                relationIds.forEach { rId ->
+                    batch.update(db.collection("users").document(currentUserId), "relationIds", com.google.firebase.firestore.FieldValue.arrayRemove(rId))
+                    // Opcionalmente podríamos limpiar la relación si queda vacía, pero por ahora solo nos removemos
+                }
+
+                // 2. Eliminar documento del usuario
+                batch.delete(db.collection("users").document(currentUserId))
+
+                // 3. Eliminar estados
+                batch.delete(db.collection("partner_status").document(currentUserId))
+
+                batch.commit().await()
+
+                // 4. Eliminar de Firebase Auth
+                currentUser.delete().await()
+                
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("Auth", "Error deleting account", e)
+                _syncStatus.value = "Error al eliminar cuenta: ${e.message}"
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    fun changePassword(newPassword: String, onSuccess: () -> Unit) {
+        val currentUser = FirebaseAuth.getInstance().currentUser ?: return
+        viewModelScope.launch {
+            try {
+                currentUser.updatePassword(newPassword).await()
+                _syncStatus.value = "Contraseña actualizada"
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("Auth", "Error changing password", e)
+                _syncStatus.value = "Error: ${e.message}"
+            }
+        }
+    }
+
+    fun sendTestNotification(type: String, context: android.content.Context) {
+        val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val sId = _sharedId.value ?: return
+        val name = _currentUserProfile.value?.name ?: "Admin"
+        val deviceId = _currentUserProfile.value?.deviceId ?: ""
+        
+        val (title, value) = when(type) {
+            "reminders" -> "Recordatorio" to "¡No olvides nuestra cita!"
+            "dates" -> "Fecha Especial" to "Se acerca nuestro aniversario ❤️"
+            "market" -> "Lista de Compras" to "Alguien agregó algo a la lista 🛒"
+            "bucket" -> "Bucket List" to "¡Nueva aventura planeada! 🌟"
+            "drawing" -> "Nuevo Dibujo" to "Te han enviado un dibujo 🎨"
+            "quick_action" -> "Acción Rápida" to "Te envío un abrazo virtual 🤗"
+            else -> "Notificación" to "Prueba de sistema exitosa"
+        }
+
+        val notification = hashMapOf(
+            "name" to title,
+            "value" to value,
+            "timestamp" to Timestamp.now(),
+            "senderName" to name,
+            "userName" to name,
+            "senderId" to deviceId,
+            "deviceId" to deviceId,
+            "senderUid" to currentUserId,
+            "relationId" to sId,
+            "targetTopic" to "relation_$sId"
+        )
+
+        db.collection("relations").document(sId).collection("quick_messages").add(notification)
+            .addOnSuccessListener {
+                Toast.makeText(context, "Notificación de $type enviada", Toast.LENGTH_SHORT).show()
+            }
     }
 
     fun refresh() {

@@ -14,8 +14,8 @@ android {
         applicationId = "com.lexnicholls.lovecounter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.2.1"
+        versionCode = 9
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -38,6 +38,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+}
+
+// Nombre base para los archivos generados (APK/Bundle)
+base {
+    archivesName.set("Meld-${android.defaultConfig.versionName}")
 }
 
 dependencies {
@@ -65,6 +70,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    debugImplementation(libs.androidx.ui.tooling)
     implementation(libs.androidx.ui.tooling.preview)
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")

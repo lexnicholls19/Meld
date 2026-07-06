@@ -16,6 +16,7 @@ val MarketColor = Color(0xFF4CAF50)
 val BucketColor = Color(0xFFFF9800)
 val MoviesColor = Color(0xFFE91E63)
 val DailyColor = Color(0xFF03A9F4)
+val WellnessColor = Color(0xFFF06292)
 
 // Google Official Brand Color
 val GoogleBlue = Color(0xFF4285F4)

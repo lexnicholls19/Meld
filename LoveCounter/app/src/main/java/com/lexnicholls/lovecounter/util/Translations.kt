@@ -154,6 +154,20 @@ interface IMainStrings {
     val relationshipDate: String
     val setDate: String
     val mainTitleTooltip: String
+    val wellness: String
+    val wellnessDesc: String
+    val periodStatus: String
+    val nextPeriodIn: String
+    val noDataRecorded: String
+    val logPeriodStart: String
+    val answeredQuestions: String
+    val noQuestionsAnswered: String
+    val changePassword: String
+    val deleteAccount: String
+    val deleteAccountConfirm: String
+    val deleteAccountDesc: String
+    val typeDeleteToConfirm: String
+    val newPassword: String
 }
 
 interface IFeatureStrings {
@@ -232,6 +246,7 @@ interface IFeatureStrings {
     val drawingSent: String
     val quickMessageSent: String
     val newDrawingNotification: String
+    val itemDeleted: String
     val skipInitialConfig: String
     val skipInitialConfigConfirm: String
     val displayMode: String
@@ -242,6 +257,7 @@ interface IFeatureStrings {
     val itemsPerRow: String
     val display: String
     val deleteCategoryWarning: String
+    val deleteMovieCategoryWarning: String
     val episodes: String
     val seasons: String
     val duration: String
@@ -273,6 +289,10 @@ interface IFeatureStrings {
     val wishlistEmpty: String
     val moviesEmpty: String
     val bucketEmpty: String
+    val trackPeriodQuestion: String
+    val shareWellnessQuestion: String
+    val advancedConfig: String
+    val testNotification: String
 }
 
 data class MainStrings(
@@ -412,7 +432,21 @@ data class MainStrings(
     override val changeActiveProfile: String,
     override val relationshipDate: String,
     override val setDate: String,
-    override val mainTitleTooltip: String
+    override val mainTitleTooltip: String,
+    override val wellness: String,
+    override val wellnessDesc: String,
+    override val periodStatus: String,
+    override val nextPeriodIn: String,
+    override val noDataRecorded: String,
+    override val logPeriodStart: String,
+    override val answeredQuestions: String,
+    override val noQuestionsAnswered: String,
+    override val changePassword: String,
+    override val deleteAccount: String,
+    override val deleteAccountConfirm: String,
+    override val deleteAccountDesc: String,
+    override val typeDeleteToConfirm: String,
+    override val newPassword: String
 ) : IMainStrings
 
 data class FeatureStrings(
@@ -491,6 +525,7 @@ data class FeatureStrings(
     override val drawingSent: String,
     override val quickMessageSent: String,
     override val newDrawingNotification: String,
+    override val itemDeleted: String,
     override val skipInitialConfig: String,
     override val skipInitialConfigConfirm: String,
     override val displayMode: String,
@@ -501,6 +536,7 @@ data class FeatureStrings(
     override val itemsPerRow: String,
     override val display: String,
     override val deleteCategoryWarning: String,
+    override val deleteMovieCategoryWarning: String,
     override val episodes: String,
     override val seasons: String,
     override val duration: String,
@@ -531,7 +567,11 @@ data class FeatureStrings(
     override val marketEmpty: String,
     override val wishlistEmpty: String,
     override val moviesEmpty: String,
-    override val bucketEmpty: String
+    override val bucketEmpty: String,
+    override val trackPeriodQuestion: String,
+    override val shareWellnessQuestion: String,
+    override val advancedConfig: String,
+    override val testNotification: String
 ) : IFeatureStrings
 
 // Clase final que delega a las implementaciones para mantener compatibilidad con strings.propiedad
@@ -592,7 +632,7 @@ val SpanishStrings = Strings(
         addedBy = "Añadido por",
         someone = "Alguien",
         value = "Valor",
-        optional = "opcional",
+        optional = "Opcional",
         add = "Añadir",
         cancel = "Cancelar",
         details = "Detalles",
@@ -637,7 +677,7 @@ val SpanishStrings = Strings(
         addCategory = "Añadir categoría",
         addItem = "Añadir nuevo ítem",
         categoryName = "Nombre de la Categoría",
-        optionalShort = "opcional",
+        optionalShort = "Opcional",
         markedAsWatchedOn = "Marcado como visto el %s",
         productPlaceholder = "Nombre del producto",
         additionalData = "Datos adicionales",
@@ -683,7 +723,21 @@ val SpanishStrings = Strings(
         changeActiveProfile = "Cambiar perfil activo",
         relationshipDate = "Fecha de inicio de relación",
         setDate = "Establecer fecha",
-        mainTitleTooltip = "Define un título para verlo en el inicio ✨"
+        mainTitleTooltip = "Define un título para verlo en el inicio ✨",
+        wellness = "Ciclo y bienestar",
+        wellnessDesc = "Seguimiento de ciclo menstrual",
+        periodStatus = "En periodo",
+        nextPeriodIn = "Próximo periodo en",
+        noDataRecorded = "No hay datos registrados",
+        logPeriodStart = "Registrar Inicio de Periodo",
+        answeredQuestions = "Preguntas respondidas",
+        noQuestionsAnswered = "Aún no han respondido ninguna pregunta",
+        changePassword = "Cambiar contraseña",
+        deleteAccount = "Eliminar cuenta",
+        deleteAccountConfirm = "¿Confirmas que deseas eliminar tu cuenta?",
+        deleteAccountDesc = "Al eliminar tu cuenta se borrará toda la información relacionada (listas y se eliminará de las relaciones en las que apareces).",
+        typeDeleteToConfirm = "Escribe 'Eliminar' para confirmar",
+        newPassword = "Nueva contraseña"
     ),
     features = FeatureStrings(
         relation = "Relación",
@@ -751,6 +805,7 @@ val SpanishStrings = Strings(
         noDrawingsToday = "No hay dibujos guardados hoy.",
         drawingFrom = "Dibujo de %s",
         sentAt = "Enviado a las %s",
+        itemDeleted = "El ítem se ha eliminado",
         download = "Descargar",
         editAdd = "Editar (Agregar)",
         drawingSaved = "Imagen guardada en Galería",
@@ -771,6 +826,7 @@ val SpanishStrings = Strings(
         itemsPerRow = "Ítems por fila",
         display = "Diseño",
         deleteCategoryWarning = "Al ocultar esta categoría, todos los registros asociados a ella se eliminarán permanentemente de la base de datos. ¿Deseas continuar?",
+        deleteMovieCategoryWarning = "Al eliminar esta categoria se eliminaran todos los items dentro de ella.",
         episodes = "Episodios",
         seasons = "Temporadas",
         duration = "Duración",
@@ -801,7 +857,11 @@ val SpanishStrings = Strings(
         marketEmpty = "Aqui podras guardar los items que necesites cuando vayas a mercar",
         wishlistEmpty = "Aqui podras agregar compras a futuro o cosas que quieras comprar junto con el precio de ser necesario",
         moviesEmpty = "Aqui podras llevar control de las series y peliculas que quieras ver a futuro",
-        bucketEmpty = "Aqui podras agregar cosas por hacer, como restaurantes a visitar, sitios que quieras ver a futuro y guardar el progreso de tus aventuras"
+        bucketEmpty = "Aqui podras agregar cosas por hacer, como restaurantes a visitar, sitios que quieras ver a futuro y guardar el progreso de tus aventuras",
+        trackPeriodQuestion = "¿Quieres rastrear tu ciclo menstrual?",
+        shareWellnessQuestion = "¿Quieres compartir esta información con tu pareja?",
+        advancedConfig = "Configuración avanzada",
+        testNotification = "Probar notificación"
     )
 )
 
@@ -852,7 +912,7 @@ val EnglishStrings = Strings(
         addedBy = "Added by",
         someone = "Someone",
         value = "Value",
-        optional = "optional",
+        optional = "Optional",
         add = "Add",
         cancel = "Cancel",
         details = "Details",
@@ -897,7 +957,7 @@ val EnglishStrings = Strings(
         addCategory = "Add category",
         addItem = "Add new item",
         categoryName = "Category Name",
-        optionalShort = "optional",
+        optionalShort = "Optional",
         markedAsWatchedOn = "Marked as watched on %s",
         productPlaceholder = "Product name",
         additionalData = "Additional data",
@@ -943,7 +1003,21 @@ val EnglishStrings = Strings(
         changeActiveProfile = "Change active profile",
         relationshipDate = "Relationship start date",
         setDate = "Set date",
-        mainTitleTooltip = "Set a title to see it on home ✨"
+        mainTitleTooltip = "Set a title to see it on home ✨",
+        wellness = "Cycle & Wellness",
+        wellnessDesc = "Menstrual cycle tracking",
+        periodStatus = "In period",
+        nextPeriodIn = "Next period in",
+        noDataRecorded = "No data recorded",
+        logPeriodStart = "Log Period Start",
+        answeredQuestions = "Answered questions",
+        noQuestionsAnswered = "You haven't answered any questions yet",
+        changePassword = "Change password",
+        deleteAccount = "Delete account",
+        deleteAccountConfirm = "Confirm you want to delete your account?",
+        deleteAccountDesc = "Deleting your account will erase all related information (lists and your presence in relationships).",
+        typeDeleteToConfirm = "Type 'Delete' to confirm",
+        newPassword = "New password"
     ),
     features = FeatureStrings(
         relation = "Relation",
@@ -1011,6 +1085,7 @@ val EnglishStrings = Strings(
         noDrawingsToday = "No drawings saved today.",
         drawingFrom = "Drawing from %s",
         sentAt = "Sent at %s",
+        itemDeleted = "Item deleted",
         download = "Download",
         editAdd = "Edit (Add)",
         drawingSaved = "Image saved to Gallery",
@@ -1031,6 +1106,7 @@ val EnglishStrings = Strings(
         itemsPerRow = "Items per row",
         display = "Display",
         deleteCategoryWarning = "By hiding this category, all records associated with it will be permanently deleted from the database. Do you want to continue?",
+        deleteMovieCategoryWarning = "By deleting this category, all items within it will be deleted.",
         episodes = "Episodes",
         seasons = "Seasons",
         duration = "Duration",
@@ -1061,7 +1137,11 @@ val EnglishStrings = Strings(
         marketEmpty = "Here you can save the items you need when you go shopping.",
         wishlistEmpty = "Here you can add future purchases or things you want to buy along with the price if necessary.",
         moviesEmpty = "Here you can keep track of the series and movies you want to watch in the future.",
-        bucketEmpty = "Here you can add things to do, such as restaurants to visit, places you want to see in the future, and save the progress of your adventures."
+        bucketEmpty = "Here you can add things to do, such as restaurants to visit, places you want to see in the future, and save the progress of your adventures.",
+        trackPeriodQuestion = "Do you want to track your menstrual cycle?",
+        shareWellnessQuestion = "Do you want to share this information with your partner?",
+        advancedConfig = "Advanced settings",
+        testNotification = "Test notification"
     )
 )
 
@@ -1085,10 +1165,10 @@ val FrenchStrings = EnglishStrings.copy(
         deviceInfo = "Infos sur l'appareil",
         start = "Accueil",
         market = "Liste de courses",
-        bucket = "Cosas por hacer",
+        bucket = "Choses à faire",
         daily = "Question du jour",
-        story = "Notre Historia",
-        since = "Ensemble desde el",
+        story = "Notre Histoire",
+        since = "Ensemble depuis le",
         missYou = "Tu me manques",
         loveYou = "Je t'aime",
         years = "A",
@@ -1100,7 +1180,7 @@ val FrenchStrings = EnglishStrings.copy(
         addedBy = "Ajouté par",
         someone = "Quelqu'un",
         value = "Valeur",
-        optional = "facultatif",
+        optional = "Facultatif",
         add = "Ajouter",
         cancel = "Annuler",
         details = "Détails",
@@ -1133,7 +1213,7 @@ val FrenchStrings = EnglishStrings.copy(
         addCategory = "Ajouter une catégorie",
         addItem = "Ajouter un nouvel élément",
         categoryName = "Nom de la catégorie",
-        optionalShort = "facultatif",
+        optionalShort = "Facultatif",
         markedAsWatchedOn = "Marqué comme vu le %s",
         productPlaceholder = "Nom du produit",
         additionalData = "Données supplémentaires",
@@ -1159,12 +1239,16 @@ val FrenchStrings = EnglishStrings.copy(
         movieTitle = "Titre",
         otherWaysToSignIn = "Autres façons de se connecter",
         relationshipDate = "Date de début de relation",
-        setDate = "Définir la date"
+        setDate = "Définir la date",
+        answeredQuestions = "Questions répondues",
+        noQuestionsAnswered = "Vous n'avez pas encore répondu à de questions"
     ),
     features = EnglishStrings.features.copy(
         relation = "Relation",
         unlinkPartner = "Quitter la relation",
-        logout = "Se déconnecter",
+        logout = "Se deconnecter",
+        undo = "Annuler",
+        itemDeleted = "Élément supprimé",
         reorderCategories = "Réorganiser les catégories",
         marketList = "Liste de courses",
         description = "Description",
@@ -1175,10 +1259,15 @@ val FrenchStrings = EnglishStrings.copy(
         customizeBackground = "Personnaliser le fond",
         color1 = "Couleur 1",
         color2 = "Couleur 2",
-        backgroundColors = "Couleurs de fondo",
+        backgroundColors = "Couleurs de fond",
         intensity = "Intensité",
         both = "Les deux",
-        categoryType = "Type de contenu"
+        categoryType = "Type de contenu",
+        deleteMovieCategoryWarning = "En supprimant cette catégorie, tous les items à l'intérieur seront supprimés.",
+        trackPeriodQuestion = "Voulez-vous suivre votre cycle menstruel ?",
+        shareWellnessQuestion = "Voulez-vous partager ces informations avec votre partenaire ?",
+        advancedConfig = "Configuration avancée",
+        testNotification = "Tester la notification"
     )
 )
 
@@ -1217,7 +1306,7 @@ val GermanStrings = EnglishStrings.copy(
         addedBy = "Hinzugefügt von",
         someone = "Jemand",
         value = "Wert",
-        optional = "optional",
+        optional = "Optional",
         add = "Hinzufügen",
         cancel = "Abbrechen",
         details = "Details",
@@ -1250,7 +1339,7 @@ val GermanStrings = EnglishStrings.copy(
         addCategory = "Kategorie hinzufügen",
         addItem = "Neues Element hinzufügen",
         categoryName = "Kategoriename",
-        optionalShort = "optional",
+        optionalShort = "Optional",
         markedAsWatchedOn = "Markiert als gesehen am %s",
         productPlaceholder = "Produktname",
         additionalData = "Zusätzliche Daten",
@@ -1272,16 +1361,26 @@ val GermanStrings = EnglishStrings.copy(
         seen = "Gesehen",
         watched = "Gesehen",
         drawing = "Freies Zeichnen",
-        drawingDesc = "Machen Sie una Zeichnung, die Ihr Partner sehen wird",
+        drawingDesc = "Erstellen Sie eine Zeichnung, die Ihr Partner sehen wird",
         movieTitle = "Titel",
         otherWaysToSignIn = "Andere Möglichkeiten zur Anmeldung",
         relationshipDate = "Beziehungsbeginn",
-        setDate = "Datum festlegen"
+        setDate = "Datum festlegen",
+        answeredQuestions = "Beantwortete Fragen",
+        noQuestionsAnswered = "Du hast noch keine Fragen beantwortet",
+        changePassword = "Kennwort ändern",
+        deleteAccount = "Konto löschen",
+        deleteAccountConfirm = "Bestätigen Sie, dass Sie Ihr Konto löschen möchten?",
+        deleteAccountDesc = "Wenn Sie Ihr Konto löschen, werden alle zugehörigen Informationen (Listen und Ihre Anwesenheit in Beziehungen) gelöscht.",
+        typeDeleteToConfirm = "Geben Sie 'Löschen' ein, um zu bestätigen",
+        newPassword = "Neues Kennwort"
     ),
     features = EnglishStrings.features.copy(
         relation = "Beziehung",
         unlinkPartner = "Beziehung verlassen",
         logout = "Abmelden",
+        undo = "Rückgängig",
+        itemDeleted = "Element gelöscht",
         reorderCategories = "Kategorien neu ordnen",
         marketList = "Einkaufsliste",
         description = "Beschreibung",
@@ -1295,14 +1394,19 @@ val GermanStrings = EnglishStrings.copy(
         backgroundColors = "Hintergrundfarben",
         intensity = "Intensität",
         both = "Beide",
-        categoryType = "Inhaltstyp"
+        categoryType = "Inhaltstyp",
+        deleteMovieCategoryWarning = "Durch das Löschen dieser Kategorie werden alle darin enthaltenen Elemente gelöscht.",
+        trackPeriodQuestion = "Möchten Sie Ihren Menstruationszyklus verfolgen?",
+        shareWellnessQuestion = "Möchten Sie diese Informationen mit Ihrem Partner teilen?",
+        advancedConfig = "Erweiterte Einstellungen",
+        testNotification = "Test-Benachrichtigung"
     )
 )
 
 val PortugueseStrings = EnglishStrings.copy(
     main = EnglishStrings.main.copy(
         settings = "Configurações",
-        userName = "Seu Nombre",
+        userName = "Seu Nome",
         save = "Salvar",
         mainTitle = "Título da Tela Principal",
         apply = "Aplicar",
@@ -1319,8 +1423,8 @@ val PortugueseStrings = EnglishStrings.copy(
         deviceInfo = "Informações do Dispositivo",
         start = "Início",
         market = "Lista de mercado",
-        bucket = "Cosas por hacer",
-        daily = "Pergunta do día",
+        bucket = "Coisas para fazer",
+        daily = "Pergunta do dia",
         story = "Nossa História",
         since = "Juntos desde",
         missYou = "Sinto sua falta",
@@ -1329,12 +1433,12 @@ val PortugueseStrings = EnglishStrings.copy(
         months = "M",
         days = "D",
         weekDays = "S,T,Q,Q,S,S,D",
-        howDoYouFeel = "Como você se siente?",
+        howDoYouFeel = "Como você se sente?",
         close = "Fechar",
         addedBy = "Adicionado por",
-        someone = "Alguien",
+        someone = "Alguém",
         value = "Valor",
-        optional = "opcional",
+        optional = "Opcional",
         add = "Adicionar",
         cancel = "Cancelar",
         details = "Detalhes",
@@ -1346,13 +1450,13 @@ val PortugueseStrings = EnglishStrings.copy(
         loading = "Carregando...",
         answerQuestion = "Respondido! 🔥",
         answered = "Respondido!",
-        talkAboutThis = "Reserve um momento para conversar sobre eso hoje ❤️",
+        talkAboutThis = "Reserve um momento para conversar sobre isso hoje ❤️",
         userActionNotification = "%s respondeu à pergunta de hoje! 🔥",
         remindersDesc = "Tarefas e notas pendentes",
-        datesDesc = "Aniversários e datas especiales",
+        datesDesc = "Aniversários e datas especiais",
         marketDesc = "O que nos faz falta",
         bucketDesc = "Nossas aventuras",
-        dailyDesc = "Uma pergunta por día",
+        dailyDesc = "Uma pergunta por dia",
         hygiene = "Higiene",
         food = "Comida",
         wishlist = "Lista de desejos",
@@ -1365,13 +1469,13 @@ val PortugueseStrings = EnglishStrings.copy(
         noPendingItems = "Não há itens pendentes",
         restore = "Restaurado",
         addCategory = "Adicionar categoria",
-        addItem = "Adicionar nuevo item",
+        addItem = "Adicionar novo item",
         categoryName = "Nome da Categoria",
-        optionalShort = "opcional",
+        optionalShort = "Opcional",
         markedAsWatchedOn = "Marcado como visto em %s",
-        productPlaceholder = "Nome do producto",
+        productPlaceholder = "Nome do produto",
         additionalData = "Dados adicionais",
-        mapError = "Não foi posible abrir o mapa",
+        mapError = "Não foi possível abrir o mapa",
         viewOnMap = "Ver no mapa",
         currencyCode = "Código",
         currencyUsage = "Será usado na lista de mercado",
@@ -1388,17 +1492,27 @@ val PortugueseStrings = EnglishStrings.copy(
         films = "Filmes",
         seen = "Vista",
         watched = "Assistido",
-        drawing = "Desenho libre",
+        drawing = "Desenho livre",
         drawingDesc = "Faça um desenho que seu parceiro verá",
         movieTitle = "Título",
         otherWaysToSignIn = "Outras formas de entrar",
         relationshipDate = "Data de início do relacionamento",
-        setDate = "Definir data"
+        setDate = "Definir data",
+        answeredQuestions = "Perguntas respondidas",
+        noQuestionsAnswered = "Você ainda não respondeu a nenhuma pergunta",
+        changePassword = "Alterar senha",
+        deleteAccount = "Excluir conta",
+        deleteAccountConfirm = "Confirma que deseja excluir sua conta?",
+        deleteAccountDesc = "A exclusão da sua conta apagará todas as informações relacionadas (listas e sua presença em relacionamentos).",
+        typeDeleteToConfirm = "Digite 'Excluir' para confirmar",
+        newPassword = "Nova senha"
     ),
     features = EnglishStrings.features.copy(
         relation = "Relação",
         unlinkPartner = "Sair da relação",
         logout = "Sair",
+        undo = "Desfazer",
+        itemDeleted = "Item excluído",
         reorderCategories = "Reordenar categorias",
         marketList = "Lista de Mercado",
         description = "Descrição",
@@ -1412,7 +1526,12 @@ val PortugueseStrings = EnglishStrings.copy(
         backgroundColors = "Cores de fundo",
         intensity = "Intensidade",
         both = "Ambos",
-        categoryType = "Tipo de conteúdo"
+        categoryType = "Tipo de conteúdo",
+        deleteMovieCategoryWarning = "Ao excluir esta categoria, todos os itens dentro dela serão excluídos.",
+        trackPeriodQuestion = "Você quer rastrear seu ciclo menstrual?",
+        shareWellnessQuestion = "Você quer compartilhar esta informação com seu parceiro?",
+        advancedConfig = "Configurações avançadas",
+        testNotification = "Testar notificação"
     )
 )
 

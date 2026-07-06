@@ -12,12 +12,16 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
 import android.widget.Toast
+import androidx.compose.animation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,19 +37,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.lexnicholls.lovecounter.ui.components.AdvancedColorPicker
 import com.lexnicholls.lovecounter.ui.theme.LovePink
+import com.lexnicholls.lovecounter.ui.theme.MeldTheme
 import com.lexnicholls.lovecounter.util.t
 import com.lexnicholls.lovecounter.util.getStringsForLanguage
 import java.io.ByteArrayOutputStream
@@ -60,24 +68,23 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
     val db = FirebaseFirestore.getInstance()
     val strings = t()
 
-    var currentPath by remember { mutableStateOf<Path?>(value = null) }
+    var currentPath by remember { mutableStateOf<Path?>(null) }
     val paths = remember { mutableStateListOf<DrawingPath>() }
-    var selectedColor by remember { mutableStateOf(value = Color.Black) }
-    var backgroundColor by remember { mutableStateOf(value = Color.White) }
-    var isEraserMode by remember { mutableStateOf(value = false) }
-    var strokeSize by remember { mutableFloatStateOf(value = 15f) }
+    var selectedColor by remember { mutableStateOf(Color.Black) }
+    var backgroundColor by remember { mutableStateOf(Color.Transparent) }
+    var isEraserMode by remember { mutableStateOf(false) }
+    var strokeSize by remember { mutableFloatStateOf(25f) }
     
-    var showHistory by remember { mutableStateOf(value = false) }
-    var drawingsHistory by remember { mutableStateOf<List<DrawingData>>(value = emptyList()) }
-    var isSending by remember { mutableStateOf(value = false) }
-    var backgroundBitmap by remember { mutableStateOf<ImageBitmap?>(value = null) }
+    var showHistory by remember { mutableStateOf(false) }
+    var drawingsHistory by remember { mutableStateOf<List<DrawingData>>(emptyList()) }
+    var isSending by remember { mutableStateOf(false) }
+    var backgroundBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     
-    var selectedDrawingForView by remember { mutableStateOf<DrawingData?>(value = null) }
+    var selectedDrawingForView by remember { mutableStateOf<DrawingData?>(null) }
 
     val picture = remember { Picture() }
     val internalCanvasSize = 1024f
 
-    // Load latest drawing as background
     LaunchedEffect(userId) {
         db.collection("users").document(userId).collection("drawings")
             .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -95,280 +102,324 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
             }
     }
 
-    Scaffold(
-        /* Removing topBar to reduce top spacing as requested */
-    ) { padding ->
+    var showColorMenu by remember { mutableStateOf(false) }
+    var showSizeMenu by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 20.dp)
         ) {
-            // Custom Header
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Header: Title Left, History Right (Matches ImportantDates style)
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                }
-                
                 Text(
-                    strings.drawing, 
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold, 
-                    color = LovePink,
-                    textAlign = TextAlign.Center
+                    text = strings.drawing,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                
                 IconButton(
-                    onClick = { 
-                        loadDrawingHistory(db, userId) { 
+                    onClick = {
+                        loadDrawingHistory(db, userId) {
                             drawingsHistory = it
-                            showHistory = true 
+                            showHistory = true
                         }
+                        showSizeMenu = false
+                        showColorMenu = false
                     }
                 ) {
-                    Icon(Icons.Default.History, contentDescription = strings.todayDrawings)
+                    Icon(Icons.Default.History, null, tint = LovePink)
                 }
             }
 
-            // Background Color Picker
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                Text(strings.backgroundColor, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    listOf(Color.White, Color.Black, Color(0xFFFFEBEE), Color(0xFFE3F2FD), Color(0xFFF1F8E9), Color(0xFFFFFDE7)).forEach { color ->
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .border(
-                                    width = if (backgroundColor == color) 2.dp else 1.dp,
-                                    color = if (backgroundColor == color) LovePink else Color.LightGray,
-                                    shape = CircleShape
-                                )
-                                .clickable { backgroundColor = color },
-                        )
-                    }
+            // Toolbar
+            DrawingToolbar(
+                isEraserMode = isEraserMode,
+                onEraserModeChange = { isEraserMode = it },
+                strokeSize = strokeSize,
+                selectedColor = selectedColor,
+                showSizeMenu = showSizeMenu,
+                onShowSizeMenuChange = { 
+                    showSizeMenu = it
+                    if (it) showColorMenu = false
+                },
+                onUndo = { if (paths.isNotEmpty()) paths.removeAt(paths.size - 1) },
+                onClear = { 
+                    paths.clear() 
+                    backgroundBitmap = null
+                },
+                onMenuClose = {
+                    showSizeMenu = false
+                    showColorMenu = false
                 }
-            }
+            )
 
-            // Brush Tools
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                Text(strings.tools, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        listOf(Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow, LovePink).forEach { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(
-                                        width = if ((selectedColor == color) && !isEraserMode) 3.dp else 0.dp,
-                                        color = if ((selectedColor == color) && !isEraserMode) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                        shape = CircleShape
-                                    )
-                                    .clickable { 
-                                        selectedColor = color 
-                                        isEraserMode = false
-                                    }
-                            )
-                        }
-                    }
-                    
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = { isEraserMode = !isEraserMode }
-                        ) {
-                            Icon(
-                                if (isEraserMode) Icons.Default.Brush else Icons.Default.AutoFixHigh,
-                                contentDescription = strings.eraser,
-                                tint = if (isEraserMode) LovePink else Color.Gray,
-                            )
-                        }
-                        IconButton(
-                            onClick = { if (paths.isNotEmpty()) paths.removeAt(paths.size - 1) }
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = strings.undo, tint = Color.Gray)
-                        }
-                        IconButton(
-                            onClick = { 
-                                paths.clear() 
-                                backgroundBitmap = null
-                            }
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = strings.deleteAll, tint = Color.Gray)
-                        }
-                    }
-                }
-            }
-
-            // Slider for size adjustment
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                val label = strings.strokeSize
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
-                    Text(strokeSize.roundToInt().toString(), fontSize = 12.sp, color = LovePink, fontWeight = FontWeight.Bold)
-                }
-                Slider(
-                    value = strokeSize,
-                    onValueChange = { strokeSize = it },
-                    valueRange = 5f..150f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = LovePink,
-                        activeTrackColor = LovePink,
-                        inactiveTrackColor = LovePink.copy(alpha = 0.2f)
-                    )
-                )
-            }
-
-            // Canvas
+            // Canvas Area with Floating Overlays
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(backgroundColor)
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                currentPath = Path().apply { moveTo(offset.x, offset.y) }
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                currentPath?.lineTo(change.position.x, change.position.y)
-                                // Trigger recomposition
-                                val p = currentPath
-                                currentPath = null
-                                currentPath = p
-                            },
-                            onDragEnd = {
-                                currentPath?.let {
-                                    paths.add(DrawingPath(it, selectedColor, strokeWidth = strokeSize, isEraser = isEraserMode))
-                                }
-                                currentPath = null
-                            }
-                        )
-                    }
+                    .padding(vertical = 8.dp)
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawIntoCanvas { canvas ->
-                        val nativeCanvas = picture.beginRecording(size.width.toInt(), size.height.toInt())
-                        
-                        // 1. Draw background color
-                        nativeCanvas.drawColor(backgroundColor.toArgb())
-                        
-                        // 2. Draw background image SCALED to fill current canvas size
-                        backgroundBitmap?.let {
-                            val androidBitmap = it.asAndroidBitmap()
-                            val src = Rect(0, 0, androidBitmap.width, androidBitmap.height)
-                            val dst = Rect(0, 0, size.width.toInt(), size.height.toInt())
-                            nativeCanvas.drawBitmap(androidBitmap, src, dst, null)
-                        }
-
-                        // 3. Draw user paths
-                        val layerPaint = android.graphics.Paint()
-                        val layerRect = RectF(0f, 0f, size.width, size.height)
-                        // This isolates the CLEAR mode so it only affects user strokes in this session
-                        nativeCanvas.saveLayer(layerRect, layerPaint)
-
-                        paths.forEach { drawingPath ->
-                            val paint = android.graphics.Paint().apply {
-                                color = if (drawingPath.isEraser) android.graphics.Color.TRANSPARENT else drawingPath.color.toArgb()
-                                style = android.graphics.Paint.Style.STROKE
-                                strokeWidth = drawingPath.strokeWidth
-                                strokeCap = android.graphics.Paint.Cap.ROUND
-                                strokeJoin = android.graphics.Paint.Join.ROUND
-                                isAntiAlias = true
-                                if (drawingPath.isEraser) {
-                                    xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                                }
+                // The Canvas "Sheet"
+                Card(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (backgroundColor == Color.Transparent) Color.White.copy(alpha = 0.1f) else backgroundColor
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.2f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTapGestures(onTap = {
+                                    showSizeMenu = false
+                                    showColorMenu = false
+                                })
                             }
-                            nativeCanvas.drawPath(drawingPath.path.asAndroidPath(), paint)
-                        }
-
-                        currentPath?.let {
-                            val paint = android.graphics.Paint().apply {
-                                color = if (isEraserMode) android.graphics.Color.TRANSPARENT else selectedColor.toArgb()
-                                style = android.graphics.Paint.Style.STROKE
-                                strokeWidth = strokeSize
-                                strokeCap = android.graphics.Paint.Cap.ROUND
-                                strokeJoin = android.graphics.Paint.Join.ROUND
-                                isAntiAlias = true
-                                if (isEraserMode) {
-                                    xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
-                                }
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        showSizeMenu = false
+                                        showColorMenu = false
+                                        currentPath = Path().apply { moveTo(offset.x, offset.y) }
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        currentPath?.lineTo(change.position.x, change.position.y)
+                                        val p = currentPath
+                                        currentPath = null
+                                        currentPath = p
+                                    },
+                                    onDragEnd = {
+                                        currentPath?.let {
+                                            paths.add(DrawingPath(it, selectedColor, strokeWidth = strokeSize, isEraser = isEraserMode))
+                                        }
+                                        currentPath = null
+                                    }
+                                )
                             }
-                            nativeCanvas.drawPath(it.asAndroidPath(), paint)
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawIntoCanvas { canvas ->
+                                val nativeCanvas = picture.beginRecording(size.width.toInt(), size.height.toInt())
+                                
+                                if (backgroundColor != Color.Transparent) {
+                                    nativeCanvas.drawColor(backgroundColor.toArgb())
+                                }
+                                
+                                backgroundBitmap?.let {
+                                    val androidBitmap = it.asAndroidBitmap()
+                                    val src = Rect(0, 0, androidBitmap.width, androidBitmap.height)
+                                    val dst = Rect(0, 0, size.width.toInt(), size.height.toInt())
+                                    nativeCanvas.drawBitmap(androidBitmap, src, dst, null)
+                                }
+
+                                val layerPaint = android.graphics.Paint()
+                                val layerRect = RectF(0f, 0f, size.width, size.height)
+                                nativeCanvas.saveLayer(layerRect, layerPaint)
+
+                                paths.forEach { drawingPath ->
+                                    val paint = android.graphics.Paint().apply {
+                                        color = if (drawingPath.isEraser) android.graphics.Color.TRANSPARENT else drawingPath.color.toArgb()
+                                        style = android.graphics.Paint.Style.STROKE
+                                        strokeWidth = drawingPath.strokeWidth
+                                        strokeCap = android.graphics.Paint.Cap.ROUND
+                                        strokeJoin = android.graphics.Paint.Join.ROUND
+                                        isAntiAlias = true
+                                        if (drawingPath.isEraser) {
+                                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                                        }
+                                    }
+                                    nativeCanvas.drawPath(drawingPath.path.asAndroidPath(), paint)
+                                }
+
+                                currentPath?.let {
+                                    val paint = android.graphics.Paint().apply {
+                                        color = if (isEraserMode) android.graphics.Color.TRANSPARENT else selectedColor.toArgb()
+                                        style = android.graphics.Paint.Style.STROKE
+                                        strokeWidth = strokeSize
+                                        strokeCap = android.graphics.Paint.Cap.ROUND
+                                        strokeJoin = android.graphics.Paint.Join.ROUND
+                                        isAntiAlias = true
+                                        if (isEraserMode) {
+                                            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                                        }
+                                    }
+                                    nativeCanvas.drawPath(it.asAndroidPath(), paint)
+                                }
+                                
+                                nativeCanvas.restore()
+                                picture.endRecording()
+                                canvas.nativeCanvas.drawPicture(picture)
+                            }
                         }
-                        
-                        nativeCanvas.restore()
-                        picture.endRecording()
-                        canvas.nativeCanvas.drawPicture(picture)
+                    }
+                }
+
+                // Floating Size Slider
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showSizeMenu,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(16.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(24.dp),
+                        shadowElevation = 8.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Slider(
+                                value = strokeSize,
+                                onValueChange = { strokeSize = it },
+                                valueRange = 5f..150f,
+                                modifier = Modifier.weight(1f),
+                                colors = SliderDefaults.colors(thumbColor = LovePink, activeTrackColor = LovePink)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(text = "${strokeSize.roundToInt()}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = LovePink)
+                        }
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(80.dp))
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
+        // FABs
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                // Color FAB (Bottom Left)
+                Column(horizontalAlignment = Alignment.Start) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showColorMenu,
+                        enter = slideInVertically { it } + fadeIn(),
+                        exit = slideOutVertically { it } + fadeOut()
+                    ) {
+                        Surface(
+                            modifier = Modifier.padding(bottom = 12.dp).width(300.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                            shape = RoundedCornerShape(28.dp),
+                            shadowElevation = 12.dp,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text(
+                                    text = strings.tools,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = LovePink,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
 
-            Button(
-                onClick = {
-                    if ((paths.isNotEmpty()) || (backgroundBitmap != null) || (backgroundColor != Color.White)) {
-                        isSending = true
-                        
-                        // CREATE STANDARD SIZE BITMAP (1024x1024)
-                        val standardSize = internalCanvasSize.toInt()
-                        val resultBitmap = Bitmap.createBitmap(standardSize, standardSize, Bitmap.Config.ARGB_8888)
-                        val resultCanvas = AndroidCanvas(resultBitmap)
-                        
-                        // Scale the picture from current screen size to standard size
-                        val scaleX = standardSize.toFloat() / picture.width.toFloat()
-                        val scaleY = standardSize.toFloat() / picture.height.toFloat()
-                        resultCanvas.scale(scaleX, scaleY)
-                        resultCanvas.drawPicture(picture)
-                        
-                        val outputStream = ByteArrayOutputStream()
-                        resultBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-                        val base64 = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
-
-                        saveCanvasDrawing(db, userId, userName, base64) {
-                            isSending = false
-                            paths.clear()
-                            backgroundBitmap = null
-                            // Notificación
-                            sendInterpretedNotification(context, strings.drawing, strings.newDrawingNotification, userName)
-                            Toast.makeText(context, strings.drawingSent, Toast.LENGTH_SHORT).show()
+                                AdvancedColorPicker(
+                                    initialColor = selectedColor,
+                                    onColorChange = { 
+                                        selectedColor = it
+                                        isEraserMode = false
+                                    }
+                                )
+                                
+                                Spacer(modifier = Modifier.height(20.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                // Background Colors
+                                Text(
+                                    text = strings.backgroundColor,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.FormatColorFill, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                    listOf(Color.Transparent, Color.White, Color.Black, Color(0xFFFFEBEE), Color(0xFFE3F2FD), Color(0xFFF1F8E9)).forEach { color ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(if(color == Color.Transparent) Color.White.copy(alpha = 0.1f) else color)
+                                                .border(1.dp, if(backgroundColor == color) LovePink else Color.LightGray.copy(alpha = 0.3f), CircleShape)
+                                                .clickable { backgroundColor = color }
+                                        ) {
+                                            if (color == Color.Transparent) {
+                                                Icon(Icons.Default.Block, null, tint = Color.Red.copy(alpha = 0.5f), modifier = Modifier.fillMaxSize().padding(2.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = !isSending && ((paths.isNotEmpty()) || (backgroundBitmap != null) || (backgroundColor != Color.White)),
-            ) {
-                if (isSending) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-                } else {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(strings.sendDrawing)
+
+                    FloatingActionButton(
+                        onClick = { 
+                            val willBeOpen = !showColorMenu
+                            showColorMenu = willBeOpen
+                            if (willBeOpen) showSizeMenu = false
+                        },
+                        containerColor = if (showColorMenu) LovePink else MaterialTheme.colorScheme.surface,
+                        contentColor = if (showColorMenu) Color.White else Color.Gray,
+                        shape = CircleShape,
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(Icons.Default.Palette, contentDescription = null)
+                    }
+                }
+
+                // Send FAB (Bottom Right)
+                FloatingActionButton(
+                    onClick = {
+                        if (paths.isNotEmpty() || backgroundBitmap != null || backgroundColor != Color.Transparent) {
+                            isSending = true
+                            val standardSize = internalCanvasSize.toInt()
+                            val resultBitmap = Bitmap.createBitmap(standardSize, standardSize, Bitmap.Config.ARGB_8888)
+                            val resultCanvas = AndroidCanvas(resultBitmap)
+                            val scaleX = standardSize.toFloat() / picture.width.toFloat()
+                            val scaleY = standardSize.toFloat() / picture.height.toFloat()
+                            resultCanvas.scale(scaleX, scaleY)
+                            resultCanvas.drawPicture(picture)
+                            
+                            val outputStream = ByteArrayOutputStream()
+                            resultBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                            val base64Str = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+
+                            saveCanvasDrawing(db, userId, userName, base64Str) {
+                                isSending = false
+                                paths.clear()
+                                backgroundBitmap = null
+                                sendInterpretedNotification(context, strings.drawing, strings.newDrawingNotification, userName)
+                                Toast.makeText(context, strings.drawingSent, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    containerColor = LovePink,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    if (isSending) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                 }
             }
         }
@@ -444,6 +495,32 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
                     Text(strings.editAdd)
                 }
             },
+        )
+    }
+}
+
+@Composable
+fun ColorCircleHalo(color: Color, isSelected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.2f))
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(color)
+                .shadow(if(color == Color.White) 2.dp else 0.dp, CircleShape)
         )
     }
 }
@@ -543,3 +620,118 @@ data class DrawingPath(
     val strokeWidth: Float = 15f,
     val isEraser: Boolean = false,
 )
+
+@Composable
+fun DrawingToolbar(
+    isEraserMode: Boolean,
+    onEraserModeChange: (Boolean) -> Unit,
+    strokeSize: Float,
+    selectedColor: Color,
+    showSizeMenu: Boolean,
+    onShowSizeMenuChange: (Boolean) -> Unit,
+    onUndo: () -> Unit,
+    onClear: () -> Unit,
+    onMenuClose: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = { 
+            onEraserModeChange(false) 
+            onMenuClose()
+        }) {
+            Icon(Icons.Default.Brush, null, tint = if (!isEraserMode) LovePink else Color.Gray)
+        }
+        IconButton(onClick = { 
+            onEraserModeChange(true) 
+            onMenuClose()
+        }) {
+            Icon(Icons.Default.AutoFixHigh, null, tint = if (isEraserMode) LovePink else Color.Gray)
+        }
+        
+        // Size toggle (Circle with center point)
+        Surface(
+            modifier = Modifier
+                .size(40.dp)
+                .clickable { 
+                    onShowSizeMenuChange(!showSizeMenu)
+                },
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+            shape = CircleShape,
+            border = BorderStroke(1.dp, if(showSizeMenu) LovePink else Color.LightGray.copy(alpha = 0.3f))
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size((strokeSize / 150f * 24f).coerceAtLeast(3f).dp)
+                        .clip(CircleShape)
+                        .background(if(isEraserMode) Color.Gray else selectedColor)
+                )
+            }
+        }
+
+        IconButton(onClick = { 
+            onUndo()
+            onMenuClose()
+        }) {
+            Icon(Icons.AutoMirrored.Filled.Undo, null, tint = Color.Gray)
+        }
+        IconButton(onClick = { 
+            onClear()
+            onMenuClose()
+        }) {
+            Icon(Icons.Default.Delete, null, tint = Color.Gray)
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawingToolbarPreview() {
+    MeldTheme {
+        DrawingToolbar(
+            isEraserMode = false,
+            onEraserModeChange = {},
+            strokeSize = 25f,
+            selectedColor = Color.Black,
+            showSizeMenu = false,
+            onShowSizeMenuChange = {},
+            onUndo = {},
+            onClear = {},
+            onMenuClose = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawingHistoryItemPreview() {
+    MeldTheme {
+        DrawingHistoryItem(
+            drawing = DrawingData(
+                createdBy = "Lex",
+                timestamp = Timestamp.now(),
+                base64Data = ""
+            ),
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ColorCircleHaloPreview() {
+    MeldTheme {
+        Row(modifier = Modifier.padding(16.dp)) {
+            ColorCircleHalo(color = LovePink, isSelected = true, onClick = {})
+            Spacer(Modifier.width(8.dp))
+            ColorCircleHalo(color = Color.Blue, isSelected = false, onClick = {})
+        }
+    }
+}

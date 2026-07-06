@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,7 +47,7 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WelcomeScreen(
-    onContinue: (name: String, title: String, categories: Set<String>, date: Long?, profileUri: Uri?, currency: String, fab1: String, fab2: String, fab1Icon: String, fab2Icon: String) -> Unit,
+    onContinue: (name: String, title: String, categories: Set<String>, date: Long?, profileUri: Uri?, currency: String, fab1: String, fab2: String, fab1Icon: String, fab2Icon: String, trackWellness: Boolean, shareWellness: Boolean) -> Unit,
     viewModel: LoveViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -61,6 +62,8 @@ fun WelcomeScreen(
     var fab2 by remember { mutableStateOf("") }
     var fab1Icon by remember { mutableStateOf("") }
     var fab2Icon by remember { mutableStateOf("") }
+    var trackWellness by remember { mutableStateOf(false) }
+    var shareWellness by remember { mutableStateOf(false) }
     
     val allCategories = listOf(
         "reminders" to strings.reminders,
@@ -69,7 +72,8 @@ fun WelcomeScreen(
         "bucket" to strings.bucket,
         "drawing" to strings.drawing,
         "movies" to strings.movies,
-        "daily" to strings.daily
+        "daily" to strings.daily,
+        "wellness" to strings.wellness
     )
     var visibleCategories by remember { mutableStateOf(allCategories.map { it.first }.toSet()) }
     
@@ -93,7 +97,13 @@ fun WelcomeScreen(
         uri?.let { profilePicUri = it }
     }
 
-    val datePickerState = rememberDatePickerState()
+    val datePickerState = rememberDatePickerState(
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                return utcTimeMillis <= System.currentTimeMillis()
+            }
+        }
+    )
 
     LaunchedEffect(syncStatus) {
         syncStatus?.let {
@@ -323,6 +333,35 @@ fun WelcomeScreen(
                 }
             }
 
+            // Wellness Group
+            SettingsGroupWelcome(title = strings.wellness) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { trackWellness = !trackWellness },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = trackWellness,
+                        onCheckedChange = { trackWellness = it },
+                        colors = CheckboxDefaults.colors(checkedColor = LovePink)
+                    )
+                    Text(strings.trackPeriodQuestion)
+                }
+                
+                AnimatedVisibility(visible = trackWellness) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clickable { shareWellness = !shareWellness },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = shareWellness,
+                            onCheckedChange = { shareWellness = it },
+                            colors = CheckboxDefaults.colors(checkedColor = LovePink)
+                        )
+                        Text(strings.shareWellnessQuestion)
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
@@ -331,7 +370,7 @@ fun WelcomeScreen(
                         ProfileImageManager.saveToInternalStorage(context, uri)
                         scope.launch { ProfileImageManager.uploadToCloud(context, uri) }
                     }
-                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon)
+                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon, trackWellness, shareWellness)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -419,7 +458,7 @@ fun WelcomeScreen(
                         ProfileImageManager.saveToInternalStorage(context, uri)
                         scope.launch { ProfileImageManager.uploadToCloud(context, uri) }
                     }
-                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon)
+                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon, trackWellness, shareWellness)
                 }
             ) {
                 Text(strings.skipInitialConfigConfirm)

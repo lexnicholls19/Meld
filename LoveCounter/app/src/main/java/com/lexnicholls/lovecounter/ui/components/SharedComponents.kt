@@ -1,13 +1,18 @@
 package com.lexnicholls.lovecounter.ui.components
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -15,10 +20,87 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.lexnicholls.lovecounter.util.t
 import com.lexnicholls.lovecounter.ui.theme.LovePink
 import com.lexnicholls.lovecounter.ui.theme.LocalIsDark
 import com.lexnicholls.lovecounter.ui.theme.LocalCustomColors
+import kotlinx.coroutines.delay
+
+@Composable
+fun LoveUndoSnackbar(
+    show: Boolean,
+    onUndo: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (show) {
+        Popup(
+            alignment = Alignment.BottomCenter,
+            properties = PopupProperties(
+                focusable = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                visible = true
+                delay(5000)
+                visible = false
+                delay(300) // Wait for exit animation
+                onDismiss()
+            }
+
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding()
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.98f),
+                        shadowElevation = 8.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 20.dp)
+                                .fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = t().itemDeleted,
+                                color = MaterialTheme.colorScheme.inverseOnSurface,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = t().undo.uppercase(),
+                                color = LovePink,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onUndo() }
+                                    .padding(8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun AppBackground(content: @Composable () -> Unit) {
@@ -70,6 +152,7 @@ fun LoveAlertDialog(
     onConfirm: () -> Unit,
     onDismiss: (() -> Unit)? = null,
     showDismissButton: Boolean = true,
+    enabledConfirm: Boolean = true,
     titleContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
@@ -95,9 +178,10 @@ fun LoveAlertDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onConfirm()
-            }) {
+            TextButton(
+                onClick = { onConfirm() },
+                enabled = enabledConfirm
+            ) {
                 Text(confirmButtonText, fontWeight = FontWeight.Bold)
             }
         },
