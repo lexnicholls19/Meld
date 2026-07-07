@@ -202,9 +202,17 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.System -> isSystemInDarkTheme()
             }
 
+            val themeSuffix = if (useDarkTheme) "_dark" else "_light"
+
             var userName by rememberSaveable { mutableStateOf(sharedPrefs.getString("user_name", "") ?: "") }
-            var bgColor1 by rememberSaveable { mutableStateOf(sharedPrefs.getString("bg_color_1", null)) }
-            var bgColor2 by rememberSaveable { mutableStateOf(sharedPrefs.getString("bg_color_2", null)) }
+            var bgColor1 by remember(useDarkTheme, sharedId) { 
+                val p = if (sharedId != null) "rel_${sharedId}_" else ""
+                mutableStateOf(sharedPrefs.getString("${p}bg_color_1$themeSuffix", null)) 
+            }
+            var bgColor2 by remember(useDarkTheme, sharedId) { 
+                val p = if (sharedId != null) "rel_${sharedId}_" else ""
+                mutableStateOf(sharedPrefs.getString("${p}bg_color_2$themeSuffix", null)) 
+            }
             var widgetConfigs by rememberSaveable { 
                 val saved = sharedPrefs.getString("widget_configs", "Timer") ?: "Timer"
                 mutableStateOf(saved.split(",").filter { it.isNotBlank() }.toSet())
@@ -241,9 +249,18 @@ class MainActivity : ComponentActivity() {
                 mutableStateOf(if (saved == -1L) null else saved)
             }
             var visibleCategories by rememberSaveable {
-                val default = "reminders,dates,market,bucket,drawing,daily,movies"
-                val saved = sharedPrefs.getString("visible_categories", default) ?: default
-                mutableStateOf(saved.split(",").filter { it.isNotBlank() }.toSet())
+                val allPossible = setOf("reminders", "dates", "market", "bucket", "drawing", "daily", "movies", "wellness")
+                val default = "reminders,dates,market,bucket,drawing,daily,movies,wellness"
+                val saved = sharedPrefs.getString("visible_categories", null)
+                val currentSet = if (saved == null) {
+                    allPossible
+                } else {
+                    val set = saved.split(",").filter { it.isNotBlank() }.toMutableSet()
+                    // Migración: Si es un usuario antiguo y no tiene wellness en su lista guardada, la agregamos por defecto
+                    if (!set.contains("wellness")) set.add("wellness")
+                    set
+                }
+                mutableStateOf(currentSet)
             }
             var categoryOrder by rememberSaveable {
                 val allPossible = listOf("reminders", "dates", "market", "bucket", "drawing", "daily", "movies", "wellness")
@@ -299,8 +316,8 @@ class MainActivity : ComponentActivity() {
 
                     mainTitle = getString("main_screen_title", "") ?: ""
                     userName = getString("user_name", "") ?: ""
-                    bgColor1 = getString("bg_color_1", null)
-                    bgColor2 = getString("bg_color_2", null)
+                    bgColor1 = getString("bg_color_1$themeSuffix", null)
+                    bgColor2 = getString("bg_color_2$themeSuffix", null)
                     fabMessage1 = getString("fab_message_1", null)
                     fabMessage2 = getString("fab_message_2", null)
                     fabIcon1 = getString("fab_icon_1", "") ?: ""
@@ -313,8 +330,11 @@ class MainActivity : ComponentActivity() {
                     autoRotateInterval = getInt("widget_rotate_interval", 60)
                     
                     val defaultCategories = "reminders,dates,market,bucket,drawing,daily,movies,wellness"
-                    visibleCategories = (getString("visible_categories", defaultCategories) ?: defaultCategories)
-                        .split(",").filter { it.isNotBlank() }.toSet()
+                    val rawVisible = getString("visible_categories", defaultCategories) ?: defaultCategories
+                    visibleCategories = rawVisible.split(",").filter { it.isNotBlank() }.toMutableSet().apply {
+                        // Migración: Asegurar que wellness esté presente si no estaba
+                        if (!contains("wellness")) add("wellness")
+                    }.toSet()
                     
                     val rawOrder = getString("category_order", null) ?: defaultCategories
                     categoryOrder = rawOrder.split(",").filter { it.isNotBlank() }.toMutableList().apply {
@@ -336,16 +356,26 @@ class MainActivity : ComponentActivity() {
                     // Valores por defecto globales cuando no hay relación activa
                     mainTitle = sharedPrefs.getString("main_screen_title", "") ?: ""
                     userName = sharedPrefs.getString("user_name", "") ?: ""
+                    bgColor1 = sharedPrefs.getString("bg_color_1$themeSuffix", null)
+                    bgColor2 = sharedPrefs.getString("bg_color_2$themeSuffix", null)
                     fabMessage1 = sharedPrefs.getString("fab_message_1", null)
                     fabMessage2 = sharedPrefs.getString("fab_message_2", null)
                     fabIcon1 = sharedPrefs.getString("fab_icon_1", "") ?: ""
                     fabIcon2 = sharedPrefs.getString("fab_icon_2", "") ?: ""
                     localCurrency = sharedPrefs.getString("local_currency", "COP") ?: "COP"
                     val defaultCategories = "reminders,dates,market,bucket,drawing,daily,movies,wellness"
-                    visibleCategories = (sharedPrefs.getString("visible_categories", defaultCategories) ?: defaultCategories)
-                        .split(",").filter { it.isNotBlank() }.toSet()
-                    categoryOrder = (sharedPrefs.getString("category_order", defaultCategories) ?: defaultCategories)
-                        .split(",").filter { it.isNotBlank() }.toList()
+                    val rawVisible = sharedPrefs.getString("visible_categories", defaultCategories) ?: defaultCategories
+                    visibleCategories = rawVisible.split(",").filter { it.isNotBlank() }.toMutableSet().apply {
+                        if (!contains("wellness")) add("wellness")
+                    }.toSet()
+
+                    val rawOrder = sharedPrefs.getString("category_order", defaultCategories) ?: defaultCategories
+                    categoryOrder = rawOrder.split(",").filter { it.isNotBlank() }.toMutableList().apply {
+                        val allPossible = listOf("reminders", "dates", "market", "bucket", "drawing", "daily", "movies", "wellness")
+                        allPossible.forEach { cat ->
+                            if (!contains(cat)) add(cat)
+                        }
+                    }.toList()
                     val sDate = sharedPrefs.getLong("relationship_date", -1L)
                     relationshipDate = if (sDate == -1L) null else sDate
                 }
@@ -399,7 +429,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 ProvideStrings(appLanguage) {
                     val strings = t()
-                    var showAddDialog by rememberSaveable { mutableStateOf(false) }
+                    var showAddDialogForRoute by rememberSaveable { mutableStateOf<String?>(null) }
                     var showDeleteMoviesDialog by rememberSaveable { mutableStateOf(false) }
                     var isMovieSelectionMode by remember { mutableStateOf(false) }
                     var isCompletedViewOpen by rememberSaveable { mutableStateOf(false) }
@@ -407,14 +437,15 @@ class MainActivity : ComponentActivity() {
                     var isGiftExpanded by rememberSaveable { mutableStateOf(false) }
                     var isMainReorderMode by rememberSaveable { mutableStateOf(false) }
 
-                    // Reset completed view state when changing screens
-                    LaunchedEffect(currentDestination?.route) {
+                    // Reset common interaction states when the route changes
+                    val currentRouteName = currentDestination?.route
+                    val lastRoute = remember { mutableStateOf<String?>(null) }
+                    
+                    if (currentRouteName != lastRoute.value) {
+                        isMovieSelectionMode = false
                         isCompletedViewOpen = false
                         isGiftExpanded = false
-                        isMainReorderMode = false
-                        isMovieSelectionMode = false
-                        showDeleteMoviesDialog = false
-                        showAddDialog = false
+                        lastRoute.value = currentRouteName
                     }
 
                     // Handle System Back Button
@@ -460,8 +491,8 @@ class MainActivity : ComponentActivity() {
                             AnimatedContent(
                                 targetState = currentRoute,
                                 transitionSpec = {
-                                    (fadeIn(animationSpec = tween(220, delayMillis = 90)) + scaleIn(initialScale = 0.92f, animationSpec = tween(220, delayMillis = 90)))
-                                        .togetherWith(fadeOut(animationSpec = tween(90)))
+                                    (fadeIn(animationSpec = tween(150, delayMillis = 50)) + scaleIn(initialScale = 0.95f, animationSpec = tween(150, delayMillis = 50)))
+                                        .togetherWith(fadeOut(animationSpec = tween(80)))
                                 },
                                 label = "FABTransition"
                             ) { targetRoute ->
@@ -570,6 +601,7 @@ class MainActivity : ComponentActivity() {
                                     targetRoute != Screen.Welcome.name && 
                                     targetRoute != Screen.Drawing.name && 
                                     targetRoute != Screen.Wellness.name &&
+                                    targetRoute != Screen.WellnessCalendar.name &&
                                     targetRoute?.startsWith(Screen.MovieDetail.name) != true
                                 ) {
                                     Row(
@@ -598,7 +630,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                             Spacer(modifier = Modifier.width(12.dp))
                                         }
-                                        FloatingActionButton(onClick = { showAddDialog = true }) {
+                                        FloatingActionButton(onClick = { showAddDialogForRoute = targetRoute }) {
                                             Icon(Icons.Default.Add, contentDescription = strings.add)
                                         }
                                     }
@@ -889,6 +921,12 @@ class MainActivity : ComponentActivity() {
                                             WellnessScreen(
                                                 userId = sharedId ?: "",
                                                 userName = userName,
+                                                onBack = { navController.popBackStack() },
+                                                onNavigateToCalendar = { navController.navigate(Screen.WellnessCalendar.name) }
+                                            )
+                                        }
+                                        composable(Screen.WellnessCalendar.name) {
+                                            WellnessCalendarScreen(
                                                 onBack = { navController.popBackStack() }
                                             )
                                         }
@@ -903,8 +941,8 @@ class MainActivity : ComponentActivity() {
                                             RemindersScreen(
                                                 deviceId = deviceId,
                                                 userName = userName,
-                                                showAddDialog = showAddDialog,
-                                                onDismissDialog = { showAddDialog = false },
+                                                showAddDialog = showAddDialogForRoute == Screen.Second.name,
+                                                onDismissDialog = { showAddDialogForRoute = null },
                                                 onCompletedViewToggled = { isCompletedViewOpen = it },
                                                 userId = sharedId ?: ""
                                             )
@@ -913,8 +951,8 @@ class MainActivity : ComponentActivity() {
                                             ImportantDatesScreen(
                                                 deviceId = deviceId,
                                                 userName = userName,
-                                                showAddDialog = showAddDialog,
-                                                onDismissDialog = { showAddDialog = false },
+                                                showAddDialog = showAddDialogForRoute == Screen.Third.name,
+                                                onDismissDialog = { showAddDialogForRoute = null },
                                                 onCompletedViewToggled = { isCompletedViewOpen = it },
                                                 userId = sharedId ?: ""
                                             )
@@ -923,8 +961,8 @@ class MainActivity : ComponentActivity() {
                                             ShoppingListScreen(
                                                 deviceId = deviceId,
                                                 userName = userName,
-                                                showAddDialog = showAddDialog,
-                                                onDismissDialog = { showAddDialog = false },
+                                                showAddDialog = showAddDialogForRoute == Screen.Fourth.name,
+                                                onDismissDialog = { showAddDialogForRoute = null },
                                                 userId = sharedId ?: ""
                                             )
                                         }
@@ -932,8 +970,8 @@ class MainActivity : ComponentActivity() {
                                             BucketListScreen(
                                                 deviceId = deviceId,
                                                 userName = userName,
-                                                showAddDialog = showAddDialog,
-                                                onDismissDialog = { showAddDialog = false },
+                                                showAddDialog = showAddDialogForRoute == Screen.BucketList.name,
+                                                onDismissDialog = { showAddDialogForRoute = null },
                                                 onCompletedViewToggled = { isCompletedViewOpen = it },
                                                 userId = sharedId ?: ""
                                             )
@@ -941,9 +979,9 @@ class MainActivity : ComponentActivity() {
                                         composable(Screen.Movies.name) {
                                             MoviesListScreen(
                                                 userName = userName,
-                                                showAddDialog = showAddDialog,
+                                                showAddDialog = showAddDialogForRoute == Screen.Movies.name,
                                                 showDeleteDialog = showDeleteMoviesDialog,
-                                                onDismissDialog = { showAddDialog = false },
+                                                onDismissDialog = { showAddDialogForRoute = null },
                                                 onDismissDeleteDialog = { showDeleteMoviesDialog = false },
                                                 onMovieClick = { id, type -> 
                                                     navController.navigate("${Screen.MovieDetail.name}/$id/$type")
@@ -981,7 +1019,13 @@ class MainActivity : ComponentActivity() {
                                             val syncStatus by loveViewModel.syncStatus
                                             LaunchedEffect(syncStatus) {
                                                 syncStatus?.let {
-                                                    Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                                                    val message = when(it) {
+                                                        "RECENT_LOGIN_REQUIRED" -> strings.recentLoginRequired
+                                                        "RECENT_LOGIN_REQUIRED_PWD" -> strings.recentLoginRequiredChangePassword
+                                                        "PASSWORD_UPDATED" -> strings.passwordUpdated
+                                                        else -> it
+                                                    }
+                                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                                     loveViewModel.clearSyncStatus()
                                                 }
                                             }
@@ -1052,11 +1096,11 @@ class MainActivity : ComponentActivity() {
                                                     val prefix = if (sharedId != null) "rel_${sharedId}_" else ""
                                                     sharedPrefs.edit {
                                                         if (c1 == null || c2 == null) {
-                                                            remove("${prefix}bg_color_1")
-                                                            remove("${prefix}bg_color_2")
+                                                            remove("${prefix}bg_color_1$themeSuffix")
+                                                            remove("${prefix}bg_color_2$themeSuffix")
                                                         } else {
-                                                            putString("${prefix}bg_color_1", c1)
-                                                            putString("${prefix}bg_color_2", c2)
+                                                            putString("${prefix}bg_color_1$themeSuffix", c1)
+                                                            putString("${prefix}bg_color_2$themeSuffix", c2)
                                                         }
                                                     }
                                                 },

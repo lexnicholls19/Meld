@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
@@ -80,9 +81,13 @@ class LoveViewModel @Inject constructor(
     private val _incomingMessage = mutableStateOf<Pair<String, String>?>(null)
     val incomingMessage: State<Pair<String, String>?> = _incomingMessage
 
+    private val _wellnessLogs = mutableStateOf<Map<String, List<String>>>(emptyMap())
+    val wellnessLogs: State<Map<String, List<String>>> = _wellnessLogs
+
     private var membersListener: ListenerRegistration? = null
     private var relationsListener: ListenerRegistration? = null
     private var currentRelationListener: ListenerRegistration? = null
+    private var wellnessLogsListener: ListenerRegistration? = null
     private val messagesListeners = mutableMapOf<String, ListenerRegistration>()
 
     private val privateUserIds = setOf(
@@ -312,15 +317,35 @@ class LoveViewModel @Inject constructor(
 
     private fun observeMembers(rId: String) {
         membersListener?.remove()
-        membersListener = db.collection("users")
-            .whereEqualTo("relationId", rId)
-            .addSnapshotListener { snapshot, _ ->
-                if (snapshot != null) {
-                    val userList = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(User::class.java)?.copy(uid = doc.id)
-                    }
-                    _members.value = userList
+        
+        // Soporte tanto para el nuevo sistema (relationId) como para el legado (sId = uid1_uid2)
+        val query = if (rId.contains("_")) {
+            val uids = rId.split("_")
+            db.collection("users").whereIn(com.google.firebase.firestore.FieldPath.documentId(), uids)
+        } else {
+            db.collection("users").whereEqualTo("relationId", rId)
+        }
+
+        membersListener = query.addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                val userList = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(User::class.java)?.copy(uid = doc.id)
                 }
+                _members.value = userList
+            }
+        }
+    }
+
+    fun observeWellnessLogs(userId: String) {
+        wellnessLogsListener?.remove()
+        wellnessLogsListener = db.collection("users").document(userId)
+            .collection("wellness_logs")
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) return@addSnapshotListener
+                val logs = snapshot?.documents?.associate { doc ->
+                    doc.id to (doc.get("activities") as? List<String> ?: emptyList())
+                } ?: emptyMap()
+                _wellnessLogs.value = logs
             }
     }
 
@@ -588,24 +613,31 @@ class LoveViewModel @Inject constructor(
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val updates = mutableMapOf<String, Any>("name" to name)
         profilePicUrl?.let { updates["profilePicUrl"] = it }
-        db.collection("users").document(uid).update(updates)
+        db.collection("users").document(uid).set(updates, SetOptions.merge())
     }
 
     fun updateWellnessPreferences(track: Boolean, share: Boolean) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        db.collection("users").document(uid).update(mapOf(
+        db.collection("users").document(uid).set(mapOf(
             "trackWellness" to track,
             "shareWellness" to share
-        ))
+        ), SetOptions.merge())
     }
 
     fun updateWellnessData(lastPeriodStart: Timestamp?, cycleLength: Int, periodDuration: Int) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        db.collection("users").document(uid).update(mapOf(
+        db.collection("users").document(uid).set(mapOf(
             "lastPeriodStart" to lastPeriodStart,
             "cycleLength" to cycleLength,
             "periodDuration" to periodDuration
-        ))
+        ), SetOptions.merge())
+    }
+
+    fun updateWellnessLog(date: String, activities: List<String>) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        db.collection("users").document(uid)
+            .collection("wellness_logs").document(date)
+            .set(mapOf("activities" to activities), SetOptions.merge())
     }
 
     fun deleteAccount(onSuccess: () -> Unit) {
@@ -636,6 +668,9 @@ class LoveViewModel @Inject constructor(
                 currentUser.delete().await()
                 
                 onSuccess()
+            } catch (e: FirebaseAuthRecentLoginRequiredException) {
+                Log.e("Auth", "Recent login required for deletion", e)
+                _syncStatus.value = "RECENT_LOGIN_REQUIRED"
             } catch (e: Exception) {
                 Log.e("Auth", "Error deleting account", e)
                 _syncStatus.value = "Error al eliminar cuenta: ${e.message}"
@@ -650,8 +685,11 @@ class LoveViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 currentUser.updatePassword(newPassword).await()
-                _syncStatus.value = "Contraseña actualizada"
+                _syncStatus.value = "PASSWORD_UPDATED"
                 onSuccess()
+            } catch (e: FirebaseAuthRecentLoginRequiredException) {
+                Log.e("Auth", "Recent login required for password update", e)
+                _syncStatus.value = "RECENT_LOGIN_REQUIRED_PWD"
             } catch (e: Exception) {
                 Log.e("Auth", "Error changing password", e)
                 _syncStatus.value = "Error: ${e.message}"

@@ -433,8 +433,14 @@ fun SettingsScreen(
                 label = strings.trackPeriodQuestion,
                 subtitle = strings.wellnessDesc,
                 checked = currentUserProfile?.trackWellness ?: false,
-                onCheckedChange = { 
-                    loveViewModel.updateWellnessPreferences(it, currentUserProfile?.shareWellness ?: false) 
+                onCheckedChange = { isChecked ->
+                    loveViewModel.updateWellnessPreferences(isChecked, currentUserProfile?.shareWellness ?: false)
+                    // Asegurar que la categoría sea visible si se activa el trackeo
+                    if (isChecked) {
+                        onVisibleCategoriesChange(currentVisibleCategories + "wellness")
+                    } else {
+                        onVisibleCategoriesChange(currentVisibleCategories - "wellness")
+                    }
                 },
                 icon = Icons.Default.Favorite
             )
@@ -684,6 +690,7 @@ fun SettingsScreen(
                 onConfirm = {
                     if (confirmText.equals(deleteKeyword, ignoreCase = true)) {
                         loveViewModel.deleteAccount {
+                            FirebaseAuth.getInstance().signOut()
                             onLogout()
                         }
                         showDeleteAccountDialog = false
@@ -992,15 +999,9 @@ fun SettingsScreen(
                             "bucket" to strings.bucket,
                             "drawing" to strings.drawing,
                             "movies" to strings.movies,
-                            "daily" to strings.daily
+                            "daily" to strings.daily,
+                            "wellness" to strings.wellness
                         )
-                        
-                        val someoneTracksAndShares = members.any { 
-                            it.trackWellness && (it.uid == currentUserId || it.shareWellness)
-                        }
-                        if (someoneTracksAndShares) {
-                            categories.add("wellness" to strings.wellness)
-                        }
 
                         categories.forEach { (id, label) ->
                             Row(
@@ -1137,6 +1138,7 @@ fun SettingsScreen(
                 initialColor2 = c2,
                 defaultColor1 = def1,
                 defaultColor2 = def2,
+                isDarkMode = isDark,
                 isUsingDefault = currentBgColor1 == null,
                 onColorsSelected = { color1, color2 ->
                     if (color1 == null || color2 == null) {
