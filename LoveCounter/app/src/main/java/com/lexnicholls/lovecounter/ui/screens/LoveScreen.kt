@@ -101,15 +101,19 @@ fun LoveScreen(
     val currentTime by viewModel.currentTime
     
     // Optimizamos los cálculos de periodo para que no bloqueen el hilo UI
-    val periodInfo = remember(currentTime.toLocalDate(), startDate) {
-        startDate?.let { 
-            val p = java.time.Period.between(it.toLocalDate(), currentTime.toLocalDate())
-            Triple(p.years, p.months, p.days)
+    val periodInfo by remember(currentTime.toLocalDate(), startDate) {
+        derivedStateOf {
+            startDate?.let { 
+                val p = java.time.Period.between(it.toLocalDate(), currentTime.toLocalDate())
+                Triple(p.years, p.months, p.days)
+            }
         }
     }
     
-    val totalDays = remember(currentTime.toLocalDate(), startDate) {
-        startDate?.let { java.time.Duration.between(it, currentTime).toDays() } ?: -1L
+    val totalDays by remember(currentTime.toLocalDate(), startDate) {
+        derivedStateOf {
+            startDate?.let { java.time.Duration.between(it, currentTime).toDays() } ?: -1L
+        }
     }
 
     DisposableEffect(userName) {
@@ -144,15 +148,14 @@ fun LoveScreen(
     
     val actualVisibleCategories = remember(visibleCategories, members, currentUserProfile, currentUserId) {
         val filtered = visibleCategories.toMutableSet()
-        if (visibleCategories.contains("wellness")) {
-            val iTrack = currentUserProfile?.trackWellness == true
-            val someoneElseShares = members.any { it.uid != currentUserId && it.trackWellness && it.shareWellness }
-            
+        val iTrack = currentUserProfile?.trackWellness == true
+        val someoneElseShares = members.any { it.uid != currentUserId && it.trackWellness && it.shareWellness }
+
+        if (iTrack || someoneElseShares) {
+            filtered.add("wellness")
+        } else if (currentUserProfile != null) {
             // Solo la ocultamos si estamos seguros de que NADIE rastrea ni comparte
-            // Si el perfil es null, asumimos que está cargando y la dejamos visible si el usuario la marcó
-            if (currentUserProfile != null && !iTrack && !someoneElseShares) {
-                filtered.remove("wellness")
-            }
+            filtered.remove("wellness")
         }
         filtered
     }
@@ -217,7 +220,7 @@ fun LoveScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             userScrollEnabled = !isReorderMode
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "hero_card") {
                 AnimatedVisibility(
                     visible = !isReorderMode && startDate != null,
                     enter = expandVertically() + fadeIn(),
@@ -262,7 +265,22 @@ fun LoveScreen(
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         text = periodInfo?.let { (y, m, d) ->
-                                            "$y${strings.years} - $m${strings.months} - $d${strings.days}"
+                                            val yLabel = when(strings.settings) {
+                                                "Settings" -> "Y"
+                                                "Configuración" -> "Y"
+                                                else -> strings.years
+                                            }
+                                            val mLabel = when(strings.settings) {
+                                                "Settings" -> "M"
+                                                "Configuración" -> "M"
+                                                else -> strings.months
+                                            }
+                                            val dLabel = when(strings.settings) {
+                                                "Settings" -> "D"
+                                                "Configuración" -> "D"
+                                                else -> strings.days
+                                            }
+                                            "$y$yLabel - $m$mLabel - $d$dLabel"
                                         } ?: "...",
                                         fontSize = 32.sp,
                                         fontWeight = FontWeight.ExtraBold,
@@ -277,7 +295,7 @@ fun LoveScreen(
             }
 
             if (isReorderMode) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "display_mode_selector") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -305,7 +323,7 @@ fun LoveScreen(
                         }
                     }
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "drag_instructions") {
                     Text(
                         text = strings.dragToReorder,
                         fontSize = 14.sp,
@@ -406,7 +424,7 @@ fun LoveScreen(
 
             val showSummary = !isReorderMode && (displayMode == DashboardDisplayMode.ICONS || visibleTilesOrder.size <= 4)
             if (showSummary) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "summary_section") {
                     SummarySection(userId = viewModel.sharedId.value ?: "")
                 }
             }

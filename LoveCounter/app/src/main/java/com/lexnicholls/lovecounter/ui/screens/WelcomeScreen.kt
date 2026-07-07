@@ -72,8 +72,7 @@ fun WelcomeScreen(
         "bucket" to strings.bucket,
         "drawing" to strings.drawing,
         "movies" to strings.movies,
-        "daily" to strings.daily,
-        "wellness" to strings.wellness
+        "daily" to strings.daily
     )
     var visibleCategories by remember { mutableStateOf(allCategories.map { it.first }.toSet()) }
     
@@ -107,7 +106,13 @@ fun WelcomeScreen(
 
     LaunchedEffect(syncStatus) {
         syncStatus?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            val message = when(it) {
+                "RECENT_LOGIN_REQUIRED" -> strings.recentLoginRequired
+                "RECENT_LOGIN_REQUIRED_PWD" -> strings.recentLoginRequiredChangePassword
+                "PASSWORD_UPDATED" -> strings.passwordUpdated
+                else -> it
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             viewModel.clearSyncStatus()
         }
     }
@@ -370,7 +375,8 @@ fun WelcomeScreen(
                         ProfileImageManager.saveToInternalStorage(context, uri)
                         scope.launch { ProfileImageManager.uploadToCloud(context, uri) }
                     }
-                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon, trackWellness, shareWellness)
+                    val finalCategories = if (trackWellness) visibleCategories + "wellness" else visibleCategories
+                    onContinue(userName, mainTitle, finalCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon, trackWellness, shareWellness)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -458,7 +464,8 @@ fun WelcomeScreen(
                         ProfileImageManager.saveToInternalStorage(context, uri)
                         scope.launch { ProfileImageManager.uploadToCloud(context, uri) }
                     }
-                    onContinue(userName, mainTitle, visibleCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon, trackWellness, shareWellness)
+                    val finalCategories = if (trackWellness) visibleCategories + "wellness" else visibleCategories
+                    onContinue(userName, mainTitle, finalCategories, relationshipDate, profilePicUri, localCurrency, fab1, fab2, fab1Icon, fab2Icon, trackWellness, shareWellness)
                 }
             ) {
                 Text(strings.skipInitialConfigConfirm)

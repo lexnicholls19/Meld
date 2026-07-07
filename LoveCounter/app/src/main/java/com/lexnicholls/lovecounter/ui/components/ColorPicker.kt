@@ -56,6 +56,7 @@ fun ColorPickerDialog(
     initialColor2: Color,
     defaultColor1: Color,
     defaultColor2: Color,
+    isDarkMode: Boolean,
     isUsingDefault: Boolean = false,
     onColorsSelected: (Color?, Color?) -> Unit,
     onDismiss: () -> Unit
@@ -123,7 +124,7 @@ fun ColorPickerDialog(
                 }
 
                 // El Picker principal
-                key(selectingIndex, useDefault) {
+                key(selectingIndex, useDefault, isDarkMode) {
                     if (useDefault) {
                         Text(
                             text = strings.system,
@@ -134,6 +135,7 @@ fun ColorPickerDialog(
                     } else {
                         AdvancedColorPicker(
                             initialColor = if (selectingIndex == 0) color1 else color2,
+                            isDarkMode = isDarkMode,
                             onColorChange = {
                                 if (selectingIndex == 0) color1 = it else color2 = it
                             }
@@ -195,21 +197,30 @@ fun ColorSelectorTab(label: String, isSelected: Boolean, color: Color, onClick: 
 @Composable
 fun AdvancedColorPicker(
     initialColor: Color,
+    isDarkMode: Boolean,
     onColorChange: (Color) -> Unit
 ) {
+    // Definir rangos según el tema
+    val sRange = if (isDarkMode) 0.0f..1.0f else 0.0f..0.5f // Pasteles tienen poca saturación
+    val vRange = if (isDarkMode) 0.05f..0.45f else 0.8f..1.0f // Oscuros vs Claros
+
     // Mantenemos el estado HSV estable para evitar saltos de Hue a 0 al tocar negros/blancos
     val hsvState = remember {
         val hsvArr = FloatArray(3)
         AndroidColor.colorToHSV(initialColor.toArgb(), hsvArr)
-        mutableStateOf(Triple(hsvArr[0], hsvArr[1], hsvArr[2]))
+        // Coerción inicial al crear el estado
+        val h = hsvArr[0]
+        val s = hsvArr[1].coerceIn(sRange)
+        val v = hsvArr[2].coerceIn(vRange)
+        mutableStateOf(Triple(h, s, v))
     }
     var alpha by remember { mutableFloatStateOf(initialColor.alpha) }
 
     // Sincronizar si el color inicial cambia desde fuera (ej: presets)
-    LaunchedEffect(initialColor) {
+    LaunchedEffect(initialColor, isDarkMode) {
         val hsvArr = FloatArray(3)
         AndroidColor.colorToHSV(initialColor.toArgb(), hsvArr)
-        val newHsv = Triple(hsvArr[0], hsvArr[1], hsvArr[2])
+        val newHsv = Triple(hsvArr[0], hsvArr[1].coerceIn(sRange), hsvArr[2].coerceIn(vRange))
         
         val currentHsv = hsvState.value
         val currentColorInt = Color.hsv(currentHsv.first, currentHsv.second, currentHsv.third, alpha).toArgb()
@@ -228,7 +239,7 @@ fun AdvancedColorPicker(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(240.dp)) {
             // Anillo exterior de Hue
-            HueRing(hue = hsvState.value.first, onHueChange = {
+            HueRing(hue = hsvState.value.first, isDarkMode = isDarkMode, onHueChange = {
                 hsvState.value = hsvState.value.copy(first = it)
                 updateColor()
             })
@@ -238,8 +249,9 @@ fun AdvancedColorPicker(
                 hue = hsvState.value.first,
                 saturation = hsvState.value.second,
                 value = hsvState.value.third,
+                isDarkMode = isDarkMode,
                 onSVChange = { s, v ->
-                    hsvState.value = hsvState.value.copy(second = s, third = v)
+                    hsvState.value = hsvState.value.copy(second = s.coerceIn(sRange), third = v.coerceIn(vRange))
                     updateColor()
                 }
             )
@@ -301,7 +313,7 @@ fun RgbBox(label: String, value: Int) {
 }
 
 @Composable
-fun HueRing(hue: Float, onHueChange: (Float) -> Unit) {
+fun HueRing(hue: Float, isDarkMode: Boolean, onHueChange: (Float) -> Unit) {
     Canvas(modifier = Modifier
         .size(240.dp)
         .pointerInput(Unit) {
@@ -324,6 +336,10 @@ fun HueRing(hue: Float, onHueChange: (Float) -> Unit) {
         val radius = size.minDimension / 2f
         val thickness = 30.dp.toPx()
         
+        // Ajustar el brillo del anillo según el tema para feedback visual
+        val brightness = if (isDarkMode) 0.35f else 1.0f
+        fun getThemedColor(h: Float) = AndroidColor.HSVToColor(floatArrayOf(h, if (isDarkMode) 0.8f else 0.5f, brightness))
+
         drawIntoCanvas { canvas ->
             val paint = Paint().apply {
                 isAntiAlias = true
@@ -331,8 +347,8 @@ fun HueRing(hue: Float, onHueChange: (Float) -> Unit) {
                 strokeWidth = thickness
                 shader = SweepGradient(size.width / 2f, size.height / 2f, 
                     intArrayOf(
-                        AndroidColor.RED, AndroidColor.YELLOW, AndroidColor.GREEN, 
-                        AndroidColor.CYAN, AndroidColor.BLUE, AndroidColor.MAGENTA, AndroidColor.RED
+                        getThemedColor(0f), getThemedColor(60f), getThemedColor(120f), 
+                        getThemedColor(180f), getThemedColor(240f), getThemedColor(300f), getThemedColor(360f)
                     ), null)
             }
             canvas.nativeCanvas.drawCircle(size.width / 2f, size.height / 2f, radius - thickness / 2f, paint)
@@ -356,22 +372,26 @@ fun HueRing(hue: Float, onHueChange: (Float) -> Unit) {
 }
 
 @Composable
-fun SaturationValueArea(hue: Float, saturation: Float, value: Float, onSVChange: (Float, Float) -> Unit) {
+fun SaturationValueArea(hue: Float, saturation: Float, value: Float, isDarkMode: Boolean, onSVChange: (Float, Float) -> Unit) {
     // Definimos el tamaño fijo para cálculos consistentes
     val sizeDp = 160.dp
     
+    // Rangos para coerción visual y de datos
+    val sRange = if (isDarkMode) 0.0f..1.0f else 0.0f..0.5f
+    val vRange = if (isDarkMode) 0.05f..0.45f else 0.8f..1.0f
+
     Box(
         modifier = Modifier
             .size(sizeDp)
-            .pointerInput(Unit) {
+            .pointerInput(isDarkMode) {
                 // Usamos un scope de bajo nivel para evitar el "touch slop" (demora inicial)
                 // y permitir que el selector responda desde el primer milisegundo.
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitFirstDown()
                         val update = { pos: Offset ->
-                            val s = (pos.x / size.width).coerceIn(0f, 1f)
-                            val v = (1f - (pos.y / size.height)).coerceIn(0f, 1f)
+                            val s = (pos.x / size.width).coerceIn(0f, 1f).coerceIn(sRange)
+                            val v = (1f - (pos.y / size.height)).coerceIn(0f, 1f).coerceIn(vRange)
                             onSVChange(s, v)
                         }
                         
@@ -393,27 +413,41 @@ fun SaturationValueArea(hue: Float, saturation: Float, value: Float, onSVChange:
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val radius = size.width / 2f
-                val hsvColor = AndroidColor.HSVToColor(floatArrayOf(hue, 1f, 1f))
                 
                 drawIntoCanvas { canvas ->
-                    // 1. Color base (Matiz)
-                    canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
+                    // Ajustar los gradientes para que coincidan con los rangos permitidos
+                    // Para Dark Mode, el fondo general es más oscuro.
+                    // Para Light Mode, es más pastel.
+                    
+                    val paint = Paint().apply { isAntiAlias = true }
+                    
+                    // 1. Color base (Matiz) - Influenciado por V y S mínimos para mejor feedback visual
+                    val baseV = if (isDarkMode) vRange.endInclusive else vRange.start
+                    val baseS = if (isDarkMode) sRange.endInclusive else sRange.start
+                    val hsvColor = AndroidColor.HSVToColor(floatArrayOf(hue, baseS, baseV))
+                    
+                    canvas.nativeCanvas.drawCircle(radius, radius, radius, paint.apply {
+                        shader = null
                         color = hsvColor
-                        isAntiAlias = true
                     })
                     
-                    // 2. Gradiente de Saturación (Blanco -> Transparente)
-                    val whiteGradient = LinearGradient(0f, 0f, size.width, 0f, AndroidColor.WHITE, AndroidColor.TRANSPARENT, Shader.TileMode.CLAMP)
-                    canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
+                    // 2. Gradiente de Saturación (Blanco -> Transparente o similar)
+                    // En modo claro, limitamos visualmente la saturación
+                    val sStartColor = if (isDarkMode) AndroidColor.WHITE else AndroidColor.WHITE
+                    val sEndColor = if (isDarkMode) AndroidColor.TRANSPARENT else AndroidColor.argb(150, 255, 255, 255)
+                    
+                    val whiteGradient = LinearGradient(0f, 0f, size.width, 0f, sStartColor, sEndColor, Shader.TileMode.CLAMP)
+                    canvas.nativeCanvas.drawCircle(radius, radius, radius, paint.apply {
                         shader = whiteGradient
-                        isAntiAlias = true
                     })
                     
-                    // 3. Gradiente de Brillo (Transparente -> Negro)
-                    val blackGradient = LinearGradient(0f, 0f, 0f, size.height, AndroidColor.TRANSPARENT, AndroidColor.BLACK, Shader.TileMode.CLAMP)
-                    canvas.nativeCanvas.drawCircle(radius, radius, radius, Paint().apply {
+                    // 3. Gradiente de Brillo (Transparente -> Negro o similar)
+                    val vStartColor = if (isDarkMode) AndroidColor.argb(100, 0, 0, 0) else AndroidColor.TRANSPARENT
+                    val vEndColor = if (isDarkMode) AndroidColor.BLACK else AndroidColor.argb(50, 0, 0, 0)
+                    
+                    val blackGradient = LinearGradient(0f, 0f, 0f, size.height, vStartColor, vEndColor, Shader.TileMode.CLAMP)
+                    canvas.nativeCanvas.drawCircle(radius, radius, radius, paint.apply {
                         shader = blackGradient
-                        isAntiAlias = true
                     })
                 }
             }

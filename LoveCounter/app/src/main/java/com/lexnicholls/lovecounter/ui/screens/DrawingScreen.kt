@@ -13,6 +13,7 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -333,6 +334,7 @@ fun DrawingScreen(userId: String, userName: String, onBack: () -> Unit) {
 
                                 AdvancedColorPicker(
                                     initialColor = selectedColor,
+                                    isDarkMode = isSystemInDarkTheme(),
                                     onColorChange = { 
                                         selectedColor = it
                                         isEraserMode = false
