@@ -51,10 +51,17 @@ fun AdvancedSettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
             
             Text(
-                text = "Test Notifications",
-                fontSize = 18.sp,
+                text = "Test Notifications (Topic: relation_${viewModel.sharedId.value})",
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = LovePink,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            Text(
+                text = "These buttons will send a push notification to all members of the current relationship via Firebase Cloud Functions.",
+                fontSize = 12.sp,
+                color = Color.Gray,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
@@ -93,6 +100,57 @@ fun AdvancedSettingsScreen(
                 icon = Icons.Default.Favorite,
                 onClick = { viewModel.sendTestNotification("quick_action", context) }
             )
+            
+            NotificationTestButton(
+                label = "System Test",
+                icon = Icons.Default.BugReport,
+                onClick = { viewModel.sendTestNotification("system", context) }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider(color = Color.Gray.copy(alpha = 0.2f))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Troubleshooting",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = LovePink,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            val sharedPrefs = context.getSharedPreferences("prefs", android.content.Context.MODE_PRIVATE)
+            val currentId = sharedPrefs.getString("device_id", "Unknown") ?: "Unknown"
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Device ID (Critical for Notifications):", fontSize = 12.sp, color = Color.Gray)
+                    Text(currentId, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "If two phones have the same ID, they will IGNORE each other's notifications. This happens if you clone your phone data.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+
+            Button(
+                onClick = {
+                    val newId = java.util.UUID.randomUUID().toString()
+                    sharedPrefs.edit().putString("device_id", newId).apply()
+                    android.widget.Toast.makeText(context, "ID Reset! Please restart the app.", android.widget.Toast.LENGTH_LONG).show()
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Icon(Icons.Default.Refresh, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Reset Device ID")
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
         }

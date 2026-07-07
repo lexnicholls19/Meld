@@ -14,8 +14,8 @@ android {
         applicationId = "com.lexnicholls.lovecounter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "2.4.0"
+        versionCode = 12
+        versionName = "2.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

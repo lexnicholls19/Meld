@@ -781,6 +781,7 @@ class MainActivity : ComponentActivity() {
                                     val subscribedTopics = remember { mutableStateListOf<String>() }
 
                                     LaunchedEffect(relationIds) {
+                                        if (relationIds.isEmpty()) return@LaunchedEffect
                                         val currentTopics = relationIds.map { "relation_$it" }.toSet()
                                         
                                         // Suscribir a nuevos
@@ -790,6 +791,9 @@ class MainActivity : ComponentActivity() {
                                                     .addOnSuccessListener { 
                                                         Log.d("FCM", "Subscribed to $topic")
                                                         subscribedTopics.add(topic) 
+                                                    }
+                                                    .addOnFailureListener { e ->
+                                                        Log.e("FCM", "Failed to subscribe to $topic: ${e.message}")
                                                     }
                                             }
                                         }

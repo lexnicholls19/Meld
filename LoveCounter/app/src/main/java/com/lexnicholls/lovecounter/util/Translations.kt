@@ -197,6 +197,15 @@ interface IMainStrings {
     val month: String
     val year: String
     val fertile: String
+    val notificationsSection: String
+    val batteryOptimization: String
+    val batteryOptimizationDesc: String
+    val notificationsSettings: String
+    val notificationsSettingsDesc: String
+    val backgroundData: String
+    val backgroundDataDesc: String
+    val highPriorityConnection: String
+    val highPriorityConnectionDesc: String
 }
 
 interface IFeatureStrings {
@@ -504,7 +513,16 @@ data class MainStrings(
     override val cycleDay: String,
     override val month: String,
     override val year: String,
-    override val fertile: String
+    override val fertile: String,
+    override val notificationsSection: String,
+    override val batteryOptimization: String,
+    override val batteryOptimizationDesc: String,
+    override val notificationsSettings: String,
+    override val notificationsSettingsDesc: String,
+    override val backgroundData: String,
+    override val backgroundDataDesc: String,
+    override val highPriorityConnection: String,
+    override val highPriorityConnectionDesc: String
 ) : IMainStrings
 
 data class FeatureStrings(
@@ -824,7 +842,16 @@ val SpanishStrings = Strings(
         cycleDay = "Día %d del ciclo",
         month = "Mes",
         year = "Año",
-        fertile = "Fértil"
+        fertile = "Fértil",
+        notificationsSection = "Notificaciones",
+        batteryOptimization = "Optimización de Batería",
+        batteryOptimizationDesc = "Configura la app como 'Sin restricciones' para recibir notificaciones al instante.",
+        notificationsSettings = "Permisos de Notificación",
+        notificationsSettingsDesc = "Asegúrate de que todos los canales de notificación estén activados.",
+        backgroundData = "Datos en Segundo Plano",
+        backgroundDataDesc = "Permite que la app sincronice datos incluso cuando no la estés usando.",
+        highPriorityConnection = "Conexión de Alta Prioridad",
+        highPriorityConnectionDesc = "Mantiene un escudo de conexión para recibir mensajes incluso con la app cerrada."
     ),
     features = FeatureStrings(
         relation = "Relación",
@@ -1133,7 +1160,16 @@ val EnglishStrings = Strings(
         cycleDay = "Cycle day %d",
         month = "Month",
         year = "Year",
-        fertile = "Fertile"
+        fertile = "Fertile",
+        notificationsSection = "Notifications",
+        batteryOptimization = "Battery Optimization",
+        batteryOptimizationDesc = "Set the app to 'Unrestricted' to receive notifications instantly.",
+        notificationsSettings = "Notification Settings",
+        notificationsSettingsDesc = "Ensure all notification channels are enabled.",
+        backgroundData = "Background Data",
+        backgroundDataDesc = "Allow the app to sync data even when you are not using it.",
+        highPriorityConnection = "High Priority Connection",
+        highPriorityConnectionDesc = "Maintains a connection shield to receive messages even when the app is closed."
     ),
     features = FeatureStrings(
         relation = "Relation",
@@ -1733,7 +1769,15 @@ val PortugueseStrings = EnglishStrings.copy(
         noQuestionsAnswered = "Vocês ainda não responderam a nenhuma pergunta",
         registeredActivities = "Atividades registradas:",
         editPeriodDates = "Editar datas do ciclo",
-        newPassword = "Nova senha"
+        newPassword = "Nova senha",
+        batteryOptimization = "Otimização de Bateria",
+        batteryOptimizationDesc = "Configure o app como 'Sem restrições' para recibir notificações instantaneamente.",
+        notificationsSettings = "Configurações de Notificação",
+        notificationsSettingsDesc = "Certifique-se de que todos os canais de notificación estão ativos.",
+        backgroundData = "Dados em Segundo Plano",
+        backgroundDataDesc = "Permita que o app sincronize dados mesmo cuando não estiver em uso.",
+        highPriorityConnection = "Conexão de Alta Prioridade",
+        highPriorityConnectionDesc = "Mantém um escudo de conexão para receber mensagens mesmo com o app fechado."
     ),
     features = EnglishStrings.features.copy(
         relation = "Relação",

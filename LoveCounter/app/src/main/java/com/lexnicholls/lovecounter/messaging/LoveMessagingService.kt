@@ -88,10 +88,13 @@ class LoveMessagingService : FirebaseMessagingService() {
         val channel = NotificationChannel(
             channelId,
             "Recordatorios",
-            NotificationManager.IMPORTANCE_HIGH // Changed to HIGH for heads-up
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Canal para recordatorios de amor"
             enableLights(true)
+            enableVibration(true)
+            setShowBadge(true)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
         }
         notificationManager.createNotificationChannel(channel)
 

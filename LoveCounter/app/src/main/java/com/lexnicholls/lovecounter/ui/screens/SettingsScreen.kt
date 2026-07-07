@@ -89,16 +89,20 @@ fun SettingsScreen(
 
     val availableRelations by loveViewModel.availableRelations
     var showSwitchProfileDialog by remember { mutableStateOf(false) }
-    var showRenameRelationDialog by remember { mutableStateOf(false) }
     var showCreateProfileDialog by remember { mutableStateOf(false) }
     var newProfileName by remember { mutableStateOf("") }
-    var renameValue by remember { mutableStateOf("") }
 
     val sharedId by loveViewModel.sharedId
     val prefix = remember(sharedId) { if (sharedId != null) "rel_${sharedId}_" else "" }
 
     var tempName by remember(currentName) { mutableStateOf(currentName) }
     var tempTitle by remember(currentMainTitle) { mutableStateOf(currentMainTitle) }
+    
+    val relationName = remember(relationId, availableRelations) {
+        relationId?.let { availableRelations[it] } ?: strings.relation
+    }
+    var tempRelationName by remember(relationName) { mutableStateOf(relationName) }
+
     var tempFab1 by remember(prefix) { 
         mutableStateOf(sharedPrefs.getString("${prefix}fab_message_1", "") ?: "") 
     }
@@ -245,15 +249,16 @@ fun SettingsScreen(
 
         // --- SECCIÓN: PAREJA Y ENLACE ---
         SettingsGroup(title = strings.relation) {
-            val relationName = relationId?.let { availableRelations[it] } ?: strings.relation
             SettingsInputRow(
                 label = strings.relationName,
-                value = relationName,
-                onValueChange = { /* Solo vista previa */ },
+                value = tempRelationName,
+                onValueChange = { tempRelationName = it },
                 onSave = { 
-                    relationId?.let { 
-                        renameValue = availableRelations[it] ?: ""
-                        showRenameRelationDialog = true 
+                    if (relationId != null) {
+                        loveViewModel.renameRelation(relationId!!, tempRelationName.trim())
+                    } else {
+                        // Si es el perfil por defecto sin relationId formal, creamos uno
+                        loveViewModel.createProfile(tempRelationName.trim())
                     }
                 },
                 icon = Icons.AutoMirrored.Filled.Label,
@@ -552,6 +557,75 @@ fun SettingsScreen(
             }
         }
 
+        // --- SECCIÓN: NOTIFICACIONES ---
+        SettingsGroup(title = strings.notificationsSection) {
+            SettingsClickableRow(
+                label = strings.batteryOptimization,
+                value = strings.batteryOptimizationDesc,
+                icon = Icons.Default.BatteryChargingFull,
+                onClick = {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    context.startActivity(intent)
+                }
+            )
+
+            SettingsClickableRow(
+                label = strings.notificationsSettings,
+                value = strings.notificationsSettingsDesc,
+                icon = Icons.Default.NotificationsActive,
+                onClick = {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    }
+                    context.startActivity(intent)
+                }
+            )
+
+            SettingsClickableRow(
+                label = strings.backgroundData,
+                value = strings.backgroundDataDesc,
+                icon = Icons.Default.DataUsage,
+                onClick = {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }
+            )
+
+            SettingsClickableRow(
+                label = "Permiso de Superposición",
+                value = "Otorga prioridad máxima para recibir mensajes.",
+                icon = Icons.Default.Layers,
+                onClick = {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }
+            )
+
+            var persistenceEnabled by remember { 
+                mutableStateOf(sharedPrefs.getBoolean("persistence_service_enabled", false)) 
+            }
+
+            SettingsSwitchRow(
+                label = strings.highPriorityConnection,
+                subtitle = strings.highPriorityConnectionDesc,
+                checked = persistenceEnabled,
+                onCheckedChange = { enabled ->
+                    persistenceEnabled = enabled
+                    sharedPrefs.edit().putBoolean("persistence_service_enabled", enabled).apply()
+                    if (enabled) {
+                        com.lexnicholls.lovecounter.services.PersistenceService.startService(context)
+                    } else {
+                        com.lexnicholls.lovecounter.services.PersistenceService.stopService(context)
+                    }
+                },
+                icon = Icons.Default.Security
+            )
+        }
+
         // --- SECCIÓN: SISTEMA ---
         var showChangePasswordDialog by remember { mutableStateOf(false) }
         var showDeleteAccountDialog by remember { mutableStateOf(false) }
@@ -815,38 +889,6 @@ fun SettingsScreen(
                         newProfileName = ""
                         linkingCodeInput = ""
                     }) {
-                        Text(strings.cancel)
-                    }
-                }
-            )
-        }
-
-        if (showRenameRelationDialog) {
-            AlertDialog(
-                onDismissRequest = { showRenameRelationDialog = false },
-                title = { Text(strings.renameRelation) },
-                text = {
-                    Column {
-                        Text(strings.relationName, fontSize = 14.sp, color = Color.Gray)
-                        OutlinedTextField(
-                            value = renameValue,
-                            onValueChange = { renameValue = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        if (renameValue.isNotBlank() && relationId != null) {
-                            loveViewModel.renameRelation(relationId!!, renameValue)
-                            showRenameRelationDialog = false
-                        }
-                    }) {
-                        Text(strings.save)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showRenameRelationDialog = false }) {
                         Text(strings.cancel)
                     }
                 }
